@@ -1,0 +1,53 @@
+---
+input: 
+  video_device:               "/dev/v4l/by-id/usb-Sony_ILX-LR1_D518801E89CD-video-index0" #"/dev/v4l/by-id/usb-Sony_ILX-LR1_D518801E89CD-video-index1"                          
+  nav_image_topic:            "/zed/zed_node/left/image_rect_color"
+  ai_image_topic:             "/camera/image_raw"
+  depth_image_topic:          "/zed/zed_node/depth/depth_registered"
+  drone_states_topic:         "/odometry"
+  gimbal_orientation_topic:   "/gimbal_orientation"
+  pan_tilt_calibration:       "cameras_calib_4x.yaml"
+  img_type:                   "rect"                                  
+
+output:
+  detection_topic:            "/detection"
+  detection_vis_topic:        "/detection_image"
+  gimbal_planning_img_topic:  "/gimbal_planning_img"
+  gimbal_setpoint:            "/gimbal_reference"
+
+detection:
+  det_mode:                   "ai"                                   
+  confidence_threshold: 0.27                                          
+  iou_threshold: 0.3
+  path: "/home/sarax/det_ws/src/ai_scanner/weights/yolo11n_tree_seg_tuned.pt"  
+
+  min_size: 10.0
+  ## Green    
+  # h_min: 61
+  # h_max: 104
+  # s_min: 150
+  # s_max: 255
+  # v_min: 131
+  # v_max: 255
+
+  ## Red    
+  # h_min: 0
+  # h_max: 60
+  # s_min: 150
+  # s_max: 255
+  # v_min: 200
+  # v_max: 255
+
+    # Red    
+  h_min: 10
+  h_max: 60
+  s_min: 120
+  s_max: 255
+  v_min: 120
+  v_max: 255
+
+planning:
+  mode: "sweeping" # Options are: pitch_lock, pitch_yaw_lock, sweeping 
+
+visualization: true                                                
+...

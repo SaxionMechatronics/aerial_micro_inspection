@@ -1,0 +1,3 @@
+dictionary: DICT_4X4_50   # any of the cv2.aruco.DICT_* names
+marker_id:   23           # the single ID you want to detect
+marker_size: 0.185         # physical marker side length in meters
