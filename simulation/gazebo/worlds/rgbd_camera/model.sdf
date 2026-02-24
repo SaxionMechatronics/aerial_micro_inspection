@@ -74,7 +74,9 @@
       <gravity>true</gravity>
       <velocity_decay/>
     </link>
-    <!-- <plugin filename="ignition-gazebo-sensors-system" name="ignition::gazebo::systems::Sensors">
+    <!-- Sensors system is provided globally by Gazebo server config.
+         Adding it again at model level causes duplicate visuals/lights and can crash rendering. -->
+    <!-- <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
       <render_engine>ogre2</render_engine>
     </plugin> -->
   </model>

@@ -3,6 +3,7 @@ import threading
 import time
 import math
 import sys
+import yaml
 
 import numpy as np
 np.float = float  
@@ -22,9 +23,27 @@ class GimbalController(Node):
         self.declare_parameter('serial_port', '/dev/ttyTHS1')
         self.declare_parameter('baudrate', 115200)
         self.declare_parameter('mavlink_url', '')
+        self.declare_parameter('mission_config_file', '')
         port = self.get_parameter('serial_port').get_parameter_value().string_value
         baud = self.get_parameter('baudrate').get_parameter_value().integer_value
         mavlink_url = self.get_parameter('mavlink_url').get_parameter_value().string_value
+
+        mission_config_file = self.get_parameter('mission_config_file').get_parameter_value().string_value
+        if mission_config_file:
+            try:
+                with open(mission_config_file, 'r') as config_stream:
+                    mission_config = yaml.safe_load(config_stream) or {}
+                gimbal_config = mission_config.get('gimbal', {})
+
+                if isinstance(gimbal_config, dict):
+                    port = str(gimbal_config.get('serial_port', port))
+                    baud = int(gimbal_config.get('baudrate', baud))
+                    if not mavlink_url:
+                        mavlink_url = str(gimbal_config.get('mavlink_url', ''))
+            except Exception as exc:
+                self.get_logger().warning(
+                    f"Could not read gimbal settings from mission config '{mission_config_file}': {exc}"
+                )
 
         endpoint = mavlink_url if mavlink_url else port
         if mavlink_url:

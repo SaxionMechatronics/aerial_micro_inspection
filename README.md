@@ -26,10 +26,13 @@ docker build -f ai_scanner/Dockerfile -t ai_scanner:humble \
 
 ### 2. Run container with Gazebo GUI (Linux/X11)
 
+Make sure NVIDIA Container Toolkit is installed on host, then run with GPU access:
+
 ```bash
 xhost +local:docker
 
 docker run --rm -it \
+	--gpus all \
 	--net=host \
 	-e DISPLAY=$DISPLAY \
 	-e QT_X11_NO_MITSHM=1 \
@@ -45,6 +48,7 @@ If your host/container cannot access GPU acceleration, run with software renderi
 
 ```bash
 docker run --rm -it \
+	--gpus all \
 	--net=host \
 	-e DISPLAY=$DISPLAY \
 	-e QT_X11_NO_MITSHM=1 \
@@ -134,6 +138,12 @@ ros2 launch ai_scanner tree_car_px4.launch.py \
 ```
 
 `px4_make_target` selects the PX4 SITL target to build/run.
+
+To launch the dual-camera inspection pipeline:
+
+```bash
+ros2 launch ai_scanner scanner.launch.py mission_config_file:=/ws/src/ai_scanner/config/simulation/mission.yaml det_mode:='ai'
+```
 
 ## Models
 

@@ -34,20 +34,27 @@ class YOLO_Node(Node):
         # --- model setup ---
         model_path = self.config['detection']['path']
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.use_trt = bool(self.config.get('runtime', {}).get('use_trt', False))
 
         engine_path = model_path.replace('.pt', '.engine')
-        if not os.path.exists(engine_path):
-            
-            self.get_logger().info(f"\n\n\n\n\n======= TensorRT Optimized Model Not Found =======\n\n\n\n\n")
-            self.get_logger().info(f"Optimizing the model: {model_path}. This may take a while, but this operation will only happen in this run.\n\n")
-                
-            YOLO(model_path).export(format='trt', half=True, verbose=True)
-            
-            self.get_logger().info(f"\n\nOptimization Done.\n===================================================")
+        if self.use_trt:
+            if not os.path.exists(engine_path):
 
-        if os.path.exists(engine_path):
-            self.model = YOLO(engine_path, task='segment')
-            self.get_logger().info(f"Loaded YOLO model: {engine_path}")
+                self.get_logger().info(f"\n\n\n\n\n======= TensorRT Optimized Model Not Found =======\n\n\n\n\n")
+                self.get_logger().info(f"Optimizing the model: {model_path}. This may take a while, but this operation will only happen in this run.\n\n")
+
+                YOLO(model_path).export(format='trt', half=True, verbose=True)
+
+                self.get_logger().info(f"\n\nOptimization Done.\n===================================================")
+
+            if os.path.exists(engine_path):
+                self.model = YOLO(engine_path, task='segment')
+                self.get_logger().info(f"Loaded YOLO model: {engine_path}")
+            else:
+                self.get_logger().warning('TensorRT enabled but engine file is unavailable. Falling back to PyTorch model.')
+                torch.backends.cudnn.benchmark = True
+                self.model = YOLO(model_path).to(self.device)
+                self.get_logger().info(f"Loaded YOLO model: {model_path}")
         else:
             torch.backends.cudnn.benchmark = True
             self.model = YOLO(model_path).to(self.device)
@@ -67,6 +74,10 @@ class YOLO_Node(Node):
         det_topic            = self.config['output']['detection_topic']
         vis_topic            = self.config['output']['detection_vis_topic']
         self.vis_enabled     = bool(self.config['visualization'])
+        runtime_cfg          = self.config.get('runtime', {})
+        self.downsample_visualization = bool(runtime_cfg.get('downsample_visualization', False))
+        self.vis_output_width = int(runtime_cfg.get('visualization_width', 240))
+        self.vis_output_height = int(runtime_cfg.get('visualization_height', 160))
 
         # --- ROS pubs/subs ---
         qos = QoSProfile(
@@ -91,7 +102,7 @@ class YOLO_Node(Node):
             self.vis_publisher = self.create_publisher(Image, vis_topic, 10)
 
         self.latest_img_msg = None
-        self._last_time = self.get_clock().now() - Duration(seconds=1.0)
+        self._last_time = self.get_clock().now() #- Duration(seconds=0.1)
 
     def process_image(self, repeat=False):
 
@@ -187,8 +198,11 @@ class YOLO_Node(Node):
 
         # show window if desired
         if self.vis_enabled:
-            img_resized = cv2.resize(ann_bgr, (240, 160))
-            img_msg = self.bridge.cv2_to_imgmsg(img_resized, encoding='bgr8')
+            if self.downsample_visualization:
+                vis_out = cv2.resize(ann_bgr, (self.vis_output_width, self.vis_output_height))
+            else:
+                vis_out = ann_bgr
+            img_msg = self.bridge.cv2_to_imgmsg(vis_out, encoding='bgr8')
             img_msg.header.stamp = self.latest_img_msg.header.stamp
             self.vis_publisher.publish(img_msg)
 

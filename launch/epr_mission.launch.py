@@ -47,9 +47,21 @@ def generate_launch_description():
         }.items()
     )
 
+    # Launch Sony camera 
+    camera_node = Node(
+        package='ai_scanner',
+        executable='camera_node',
+        name='camera_node',
+        parameters=[{
+            'mission_config_file': LaunchConfiguration('mission_config_file'),
+        }],
+        output='screen'
+    )
+
     return LaunchDescription([
         mission_configs_arg,
         det_mode_arg,
         zed_launch,
+        camera_node,
         scanner_system_launch
     ])

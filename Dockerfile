@@ -55,18 +55,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Try requested Harmonic swap first; if the package isn't published in this apt mirror,
-# keep the Humble-compatible ros-gz stack so image build remains reproducible.
-RUN apt-get update && \
-        apt-get remove -y ros-humble-ros-gz-sim || true && \
-        if apt-cache show ros-humble-ros-gzharmonic >/dev/null 2>&1; then \
-            apt-get install -y --no-install-recommends ros-humble-ros-gzharmonic; \
-        else \
-            echo "ros-humble-ros-gzharmonic not available; using ros-humble-ros-gz packages."; \
-            apt-get install -y --no-install-recommends ros-humble-ros-gz ros-humble-ros-gz-bridge; \
-        fi && \
-        rm -rf /var/lib/apt/lists/*
-
 RUN rosdep init 2>/dev/null || true
 
 WORKDIR /ws
@@ -88,14 +76,27 @@ RUN git clone --depth 1 --branch ${PX4_GIT_TAG} https://github.com/PX4/PX4-Autop
     DONT_RUN=1 bash ./Tools/setup/ubuntu.sh --no-nuttx && \
     make -j${PX4_BUILD_JOBS} px4_sitl_default
 
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121
 RUN pip3 install --no-cache-dir --retries 10 --timeout 1000 \
-            --index-url https://download.pytorch.org/whl/cpu \
+            --index-url ${TORCH_INDEX_URL} \
             torch==2.5.1 \
             torchvision==0.20.1 && \
+        # TensorRT Python wheels are served via NVIDIA's index.
+        pip3 install --no-cache-dir --retries 10 --timeout 1000 \
+            --extra-index-url https://pypi.nvidia.com \
+            "tensorrt>7.0.0,!=10.1.0" && \
         pip3 install --no-cache-dir --retries 10 --timeout 1000 \
             ultralytics==8.4.14 \
             pymavlink==2.4.49 \
-            "transforms3d>=0.4.1"
+            "onnx>=1.12.0,<2.0.0" \
+            "onnxslim>=0.1.71" \
+            onnxruntime-gpu \
+            "transforms3d>=0.4.1" && \
+        # Keep numpy at the tested version for tf_transformations/transforms3d compatibility.
+        pip3 install --no-cache-dir --retries 10 --timeout 1000 --upgrade "numpy==1.26.4" && \
+        # Keep OpenCV Python below 4.12 for compatibility with current stack.
+        pip3 install --no-cache-dir --retries 10 --timeout 1000 --upgrade "opencv-python<4.12" && \
+        python3 -c "import cv2; from packaging.version import Version; assert Version(cv2.__version__) < Version('4.12.0'), cv2.__version__"
 
 ARG PX4_MSGS_GIT_REF=
 RUN set -e; \

@@ -61,6 +61,10 @@ class ObjectTracker(Node):
         self.planning_mode = self.config['planning']['mode']
         self.vis_enabled = self.config['visualization']
         self.img_type = self.config['input']['img_type']
+        runtime_cfg = self.config.get('runtime', {})
+        self.downsample_visualization = bool(runtime_cfg.get('downsample_visualization', False))
+        self.vis_output_width = int(runtime_cfg.get('visualization_width', 240))
+        self.vis_output_height = int(runtime_cfg.get('visualization_height', 160))
         self.rt_correction = False
 
         # Load calibration
@@ -442,14 +446,21 @@ class ObjectTracker(Node):
             # Visualize the segment breaking.
             if self.mask_gb is not None:
                 vis = cv2.cvtColor(self.mask_gb, cv2.COLOR_GRAY2BGR)
+                # Draw all non-active windows first, then draw active window last to keep it on top.
                 for idx, (x0, y0, x1, y1) in enumerate(self.wins):
-                    if idx == wp_counter:
-                        cv2.rectangle(vis, (x0, y0), (x1, y1), (0,255,0), 2)
-                    else:
+                    if idx != wp_counter:
                         cv2.rectangle(vis, (x0, y0), (x1, y1), (0,0,255), 2)
 
-                img_resized = cv2.resize(vis, (240, 160))
-                patched_msg = self.bridge.cv2_to_imgmsg(img_resized, encoding='bgr8')
+                if 0 <= wp_counter < len(self.wins):
+                    x0, y0, x1, y1 = self.wins[wp_counter]
+                    cv2.rectangle(vis, (x0, y0), (x1, y1), (0,255,0), 2)
+
+                if self.downsample_visualization:
+                    vis_out = cv2.resize(vis, (self.vis_output_width, self.vis_output_height))
+                else:
+                    vis_out = vis
+
+                patched_msg = self.bridge.cv2_to_imgmsg(vis_out, encoding='bgr8')
                 patched_msg.header.stamp = self.get_clock().now().to_msg()
                 self.image_publisher.publish(patched_msg)
 
