@@ -1,0 +1,49 @@
+---
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: GZ_TO_ROS
+
+# RGB image (Gazebo -> ROS)
+- ros_topic_name: "/nav_cam/rgb_image/image_raw"
+  gz_topic_name: "/nav_cam/rgb_image/image_raw"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# (Optional but recommended) CameraInfo
+- ros_topic_name: "/nav_cam/rgb_image/camera_info"
+  gz_topic_name: "/nav_cam/rgb_image/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+# Depth image (Gazebo -> ROS)
+- ros_topic_name: "/nav_cam/depth_image/image_raw"
+  gz_topic_name: "/nav_cam/depth_image/image_raw"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# (Optional) Depth CameraInfo
+- ros_topic_name: "/nav_cam/depth_image/camera_info"
+  gz_topic_name: "/nav_cam/depth_image/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+# Inspection RGB image (Gazebo -> ROS)
+- ros_topic_name: "/inspection_cam/rgb_image/image_raw"
+  gz_topic_name: "/inspection_cam/rgb_image/image_raw"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# Inspection RGB CameraInfo
+- ros_topic_name: "/inspection_cam/rgb_image/camera_info"
+  gz_topic_name: "/inspection_cam/rgb_image/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
