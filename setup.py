@@ -20,6 +20,21 @@ def simulation_data_files():
         entries.append((target, [os.path.join(root, f) for f in files]))
     return entries
 
+
+def config_data_files():
+    entries = []
+    config_root = 'config'
+    for root, _, files in os.walk(config_root):
+        if not files:
+            continue
+        rel = os.path.relpath(root, config_root)
+        if rel == '.':
+            target = os.path.join('share', package_name, config_root)
+        else:
+            target = os.path.join('share', package_name, config_root, rel)
+        entries.append((target, [os.path.join(root, f) for f in files]))
+    return entries
+
 setup(
     name=package_name,
     version='0.0.0',
@@ -29,10 +44,8 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
-        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
-        (os.path.join('share', package_name, 'config'), glob('config/**/*.yaml')),
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
-    ] + simulation_data_files(),
+    ] + config_data_files() + simulation_data_files(),
     install_requires=['setuptools', 'ai_scanner_interfaces'], 
     zip_safe=True,
     maintainer='Hojat Mirtajadini',
@@ -48,6 +61,7 @@ setup(
             'gimbal_tracker = ai_scanner.gimbal_tracker:main',
             'color_detector = ai_scanner.color_detector:main',
             'surface_segmentor = ai_scanner.surface_segmentor:main',
+            'micro_detector = ai_scanner.micro_detector:main',
             'px4_xrce_mission = ai_scanner.px4_xrce_mission:main',
             'gazebo_ros_bridge = ai_scanner.gazebo_ros_bridge:main'
         ],

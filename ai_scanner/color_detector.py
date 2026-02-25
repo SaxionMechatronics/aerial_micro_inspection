@@ -20,19 +20,23 @@ class ColorDetector(Node):
         with open(param_file, 'r') as f:
             self.config = yaml.safe_load(f)
 
-        img_t  = self.config['input']['nav_image_topic']
-        det_t  = self.config['output']['detection_topic']
+        color_cfg = self.config.get('color_segmentation', self.config.get('detection', {}))
+
+        input_cfg = self.config.get('input', {})
+        output_cfg = self.config.get('output', {})
+        img_t  = input_cfg.get('nav_rgb_topic', input_cfg.get('nav_image_topic'))
+        det_t  = output_cfg.get('surface_segmentation_topic', output_cfg.get('detection_topic'))
         self.vis_enabled  = bool(self.config['visualization'])
-        self.min_size = self.config['detection']['min_size']
+        self.min_size = color_cfg['min_size']
         self.img_type = self.config['input']['img_type']
-        vis_t = self.config['output']['detection_vis_topic']
+        vis_t = output_cfg.get('surface_segmentation_vis_topic', output_cfg.get('detection_vis_topic'))
         if not self.img_type in ['raw', 'rect']:
             raise ValueError("Parameter img_type can either be \'raw\' or \'rect\'.")
 
         # HSV thresholds
-        self.low_h = self.config['detection']['h_min'];  self.high_h = self.config['detection']['h_max']
-        self.low_s = self.config['detection']['s_min'];  self.high_s = self.config['detection']['s_max']
-        self.low_v = self.config['detection']['v_min'];  self.high_v = self.config['detection']['v_max']
+        self.low_h = color_cfg['h_min'];  self.high_h = color_cfg['h_max']
+        self.low_s = color_cfg['s_min'];  self.high_s = color_cfg['s_max']
+        self.low_v = color_cfg['v_min'];  self.high_v = color_cfg['v_max']
 
         # create display windows + trackbars
         # cv2.namedWindow('Detection',   cv2.WINDOW_NORMAL)

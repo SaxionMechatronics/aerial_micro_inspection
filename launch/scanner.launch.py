@@ -46,12 +46,12 @@ def _build_nodes(context):
         }]
     )
 
-    epr_yolo_node = Node(
-        package='usb_camera_yolo',
-        executable='yolo_node',
-        name='yolo_node',
+    micro_detector_node = Node(
+        package='ai_scanner',
+        executable='micro_detector',
+        name='micro_detector',
         parameters=[{
-            'param_file': 'params',
+            'mission_config_file': LaunchConfiguration('mission_config_file')
         }],
         output='screen'
     )
@@ -98,7 +98,7 @@ def _build_nodes(context):
         gimbal_node,
         tracker_node,
         color_detector_node,
-        epr_yolo_node,
+        micro_detector_node,
         ai_detector_node
     ]
 

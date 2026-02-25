@@ -27,6 +27,8 @@ class GimbalController(Node):
         port = self.get_parameter('serial_port').get_parameter_value().string_value
         baud = self.get_parameter('baudrate').get_parameter_value().integer_value
         mavlink_url = self.get_parameter('mavlink_url').get_parameter_value().string_value
+        gimbal_reference_topic = 'gimbal_reference'
+        gimbal_orientation_topic = 'gimbal_orientation'
 
         mission_config_file = self.get_parameter('mission_config_file').get_parameter_value().string_value
         if mission_config_file:
@@ -34,12 +36,23 @@ class GimbalController(Node):
                 with open(mission_config_file, 'r') as config_stream:
                     mission_config = yaml.safe_load(config_stream) or {}
                 gimbal_config = mission_config.get('gimbal', {})
+                output_config = mission_config.get('output', {})
+                input_config = mission_config.get('input', {})
 
                 if isinstance(gimbal_config, dict):
                     port = str(gimbal_config.get('serial_port', port))
                     baud = int(gimbal_config.get('baudrate', baud))
                     if not mavlink_url:
                         mavlink_url = str(gimbal_config.get('mavlink_url', ''))
+
+                if isinstance(output_config, dict):
+                    gimbal_reference_topic = str(
+                        output_config.get('gimbal_setpoint_topic', output_config.get('gimbal_setpoint', gimbal_reference_topic))
+                    )
+                if isinstance(input_config, dict):
+                    gimbal_orientation_topic = str(
+                        input_config.get('gimbal_orientation_topic', gimbal_orientation_topic)
+                    )
             except Exception as exc:
                 self.get_logger().warning(
                     f"Could not read gimbal settings from mission config '{mission_config_file}': {exc}"
@@ -70,13 +83,17 @@ class GimbalController(Node):
 
         self.create_subscription(
             QuaternionStamped,
-            'gimbal_reference',
+            gimbal_reference_topic,
             self.reference_callback,
             10
         )
 
-        self.q_pub = self.create_publisher(QuaternionStamped, 'gimbal_orientation', 10)
+        self.q_pub = self.create_publisher(QuaternionStamped, gimbal_orientation_topic, 10)
         self.tf_br = TransformBroadcaster(self)
+
+        self.get_logger().info(
+            f"Gimbal topics -> reference: {gimbal_reference_topic}, orientation: {gimbal_orientation_topic}"
+        )
 
         self.timer = self.create_timer(1.0 / 30.0, self.timer_callback)
 

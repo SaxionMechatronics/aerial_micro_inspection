@@ -32,8 +32,10 @@ class SurfaceSegmentorNode(Node):
         with open(param_file, 'r') as f:
             self.config = yaml.safe_load(f)
 
+        seg_cfg = self.config.get('surface_segmentation', self.config.get('detection', {}))
+
         # --- model setup ---
-        model_path = self.config['detection']['path']
+        model_path = seg_cfg['path']
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.use_trt = bool(self.config.get('runtime', {}).get('use_trt', False))
 
@@ -68,12 +70,15 @@ class SurfaceSegmentorNode(Node):
         self.get_logger().info(f"segmentation={'yes' if self.has_masks else 'no'}")
 
         # thresholds & topics
-        self.conf_thresh     = float(self.config['detection']['confidence_threshold'])
-        self.iou_thresh      = float(self.config['detection']['iou_threshold'])
-        self.camera_topic    = self.config['input']['nav_image_topic']
+        self.conf_thresh     = float(seg_cfg['confidence_threshold'])
+        self.iou_thresh      = float(seg_cfg['iou_threshold'])
+        self.target_class_id = int(seg_cfg.get('target_class_id', -1))
+        input_cfg = self.config.get('input', {})
+        output_cfg = self.config.get('output', {})
+        self.camera_topic    = input_cfg.get('nav_rgb_topic', input_cfg.get('nav_image_topic'))
         self.img_type        = self.config['input']['img_type']
-        det_topic            = self.config['output']['detection_topic']
-        vis_topic            = self.config['output']['detection_vis_topic']
+        det_topic            = output_cfg.get('surface_segmentation_topic', output_cfg.get('detection_topic'))
+        vis_topic            = output_cfg.get('surface_segmentation_vis_topic', output_cfg.get('detection_vis_topic'))
         self.vis_enabled     = bool(self.config['visualization'])
         runtime_cfg          = self.config.get('runtime', {})
         self.downsample_visualization = bool(runtime_cfg.get('downsample_visualization', False))
@@ -130,13 +135,19 @@ class SurfaceSegmentorNode(Node):
         # publish each instance
         boxes = res.boxes.xyxy.cpu().numpy()        # (N,4)
         confs = res.boxes.conf.cpu().numpy()        # (N,)
+        class_ids = res.boxes.cls.cpu().numpy().astype(np.int32) if res.boxes.cls is not None else np.array([], dtype=np.int32)
         masks = getattr(res.masks, 'data', None)    # (N,H,W) or None
-
+        
         H, W = cv_img.shape[:2]
         target_detected = False
         max_box_idx = -1
         max_box_score = -1
-        for i, box in enumerate(boxes):
+        candidate_indices = list(range(len(boxes)))
+        if self.target_class_id >= 0 and len(class_ids) == len(boxes):
+            candidate_indices = [i for i, cls_id in enumerate(class_ids) if int(cls_id) == self.target_class_id]
+
+        for i in candidate_indices:
+            box = boxes[i]
 
             target_detected = True
 

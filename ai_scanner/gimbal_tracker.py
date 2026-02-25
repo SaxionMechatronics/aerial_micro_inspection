@@ -49,16 +49,22 @@ class ObjectTracker(Node):
         configs_dir  = self.get_parameter('configs_dir').value
 
         # Load configurations
-        det_t  = self.config['output']['detection_topic']
-        pln_img_t  = self.config['output']['gimbal_planning_img_topic']
-        nav_img_t  = self.config['input']['nav_image_topic']
-        ai_img_t   = self.config['input']['ai_image_topic']
-        depth_t    = self.config['input']['depth_image_topic']
-        states_t   = self.config['input']['drone_states_topic']
-        gimbal_t   = self.config['input']['gimbal_orientation_topic']
-        des_ori_t   = self.config['output']['gimbal_setpoint']
-        calib_p = os.path.join(configs_dir, self.config['input']['pan_tilt_calibration'])
-        self.planning_mode = self.config['planning']['mode']
+        output_cfg = self.config.get('output', {})
+        input_cfg = self.config.get('input', {})
+        pipeline_cfg = self.config.get('pipeline', {})
+
+        det_t  = output_cfg.get('surface_segmentation_topic', output_cfg.get('detection_topic'))
+        pln_img_t  = output_cfg.get('gimbal_planning_img_topic')
+        nav_img_t  = input_cfg.get('nav_rgb_topic', input_cfg.get('nav_image_topic'))
+        ai_img_t   = input_cfg.get('inspection_topic', input_cfg.get('ai_image_topic'))
+        depth_t    = input_cfg.get('nav_depth_topic', input_cfg.get('depth_image_topic'))
+        states_t   = input_cfg.get('drone_states_topic')
+        gimbal_t   = input_cfg.get('gimbal_orientation_topic')
+        des_ori_t   = output_cfg.get('gimbal_setpoint_topic', output_cfg.get('gimbal_setpoint'))
+        calib_p = os.path.join(configs_dir, input_cfg.get('pan_tilt_calibration'))
+        self.planning_mode = pipeline_cfg.get('planning_mode', self.config.get('planning', {}).get('mode', 'sweeping'))
+        self.sweeping_overlap = float(pipeline_cfg.get('sweeping_overlap', 0.5))
+        self.min_cell_occupancy = float(pipeline_cfg.get('min_cell_occupancy', 0.3))
         self.vis_enabled = self.config['visualization']
         self.img_type = self.config['input']['img_type']
         runtime_cfg = self.config.get('runtime', {})
@@ -196,7 +202,13 @@ class ObjectTracker(Node):
             win = self.get_ai_image_size_on_nav_image(self.ai_img_shape)
             mask = self.bridge.imgmsg_to_cv2(det_msg.mask, 'mono8')
 
-            self.wins, self.ps_gb = self.sweep(depth, mask, win, overlap=0.5, threshold=0.3)
+            self.wins, self.ps_gb = self.sweep(
+                depth,
+                mask,
+                win,
+                overlap=self.sweeping_overlap,
+                threshold=self.min_cell_occupancy
+            )
             # self.ps_gb = self.transform_to_map(self.ps_gb, odom_msg)
             self.mask_gb = mask.copy()
 

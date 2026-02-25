@@ -9,7 +9,7 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('ai_scanner')
 
     # resolve your config files
-    ai_yaml    = os.path.join(pkg_share, 'config', 'sony_55mm.yaml')
+    ai_yaml    = os.path.join(pkg_share, 'config', 'real_test', 'sony_55mm.yaml')
     aruco_yaml = os.path.join(pkg_share, 'config', 'aruco.yaml')
 
     return LaunchDescription([

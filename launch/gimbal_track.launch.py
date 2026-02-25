@@ -12,7 +12,7 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('ai_scanner')
 
     # resolve your config files
-    calib_yaml    = os.path.join(pkg_share, 'config', 'cameras_calib.yaml')
+    calib_yaml    = os.path.join(pkg_share, 'config', 'real_test', 'cameras_calib.yaml')
 
     # Launch arguments
     nav_img_arg = DeclareLaunchArgument(

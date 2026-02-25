@@ -25,7 +25,9 @@ class CameraNode(Node):
             self.get_logger().error(f"Failed to open video device: {device}")
             raise RuntimeError("Camera open failed")
 
-        self.publisher_ = self.create_publisher(Image, self.config['input']['ai_image_topic'], 1)
+        input_cfg = self.config.get('input', {})
+        inspection_topic = input_cfg.get('inspection_topic', input_cfg.get('ai_image_topic'))
+        self.publisher_ = self.create_publisher(Image, inspection_topic, 1)
         self.br = CvBridge()
         self.timer = self.create_timer(1.0 / fps, self.timer_callback)
 

@@ -1,26 +1,37 @@
 ---
 input: 
   video_device:               ""                         
-  nav_image_topic:            "/nav_cam/rgb_image/image_raw"
-  ai_image_topic:             "/inspection_cam/rgb_image/image_raw"
-  depth_image_topic:          "/nav_cam/depth_image/image_raw"
+  nav_rgb_topic:              "/nav_cam/rgb_image/image_raw"
+  inspection_topic:           "/inspection_cam/rgb_image/image_raw"
+  nav_depth_topic:            "/nav_cam/depth_image/image_raw"
   drone_states_topic:         ""
   gimbal_orientation_topic:   "/gimbal_orientation"
-  pan_tilt_calibration:       "cameras_sim.yaml"
+  pan_tilt_calibration:       "simulation/cameras_sim.yaml"
   img_type:                   "rect"                                  
 
 output:
-  detection_topic:            "/detection"
-  detection_vis_topic:        "/detection_image"
-  gimbal_planning_img_topic:  "/gimbal_planning_img"
-  gimbal_setpoint:            "/gimbal_reference"
+  surface_segmentation_topic:      "/surf_seg/segment"
+  surface_segmentation_vis_topic:  "/surf_seg/vis_image"
+  micro_detection_topic:           "/micro_det/detections"
+  micro_detection_vis_topic:       "/micro_det/vis_image"
+  gimbal_planning_img_topic:       "/planning/vis_image"
+  gimbal_setpoint_topic:           "/gimbal/setpoint"
 
-detection:
-  det_mode:                   "ai"                                   
+pipeline:
+  det_mode:                   "ai"   # Options: ai, color
+  planning_mode:              "sweeping" # Options: pitch_lock, pitch_yaw_lock, sweeping
+  sweeping_overlap:           0.2
+  min_cell_occupancy:         0.8
+
+surface_segmentation:
   confidence_threshold: 0.27                                          
   iou_threshold: 0.3
-  path: "/ws/src/ai_scanner/weights/yolo11n_tree_seg_tuned.pt"  
+  # target_class_id: 1   # Set to a non-negative class id to filter only that segment class
+  # path: "/ws/src/ai_scanner/weights/yolo11n_tree_seg_tuned.pt"  
+  target_class_id: 2   
+  path: "/ws/src/ai_scanner/weights/yolo11s-seg.pt"  
 
+color_segmentation:
   min_size: 10.0
   ## Green    
   # h_min: 61
@@ -46,8 +57,10 @@ detection:
   v_min: 120
   v_max: 255
 
-planning:
-  mode: "sweeping" # Options are: pitch_lock, pitch_yaw_lock, sweeping 
+micro_detection:
+  path: "/ws/src/ai_scanner/weights/yolov10n_eggs.pt"
+  confidence_threshold: 0.05
+  iou_threshold: 0.1
 
 gimbal:
   serial_port: "/dev/ttyTHS1"
