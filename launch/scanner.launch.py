@@ -71,8 +71,8 @@ def _build_nodes(context):
     is_ai = PythonExpression(["'", LaunchConfiguration('det_mode'), "' == 'ai'"])
     ai_detector_node = Node(
         package='ai_scanner',
-        executable='tree_trunk_detector',
-        name='tree_trunk_detector',
+        executable='surface_segmentor',
+        name='surface_segmentor',
         output='screen',
         parameters=[{
             'mission_config_file': LaunchConfiguration('mission_config_file')

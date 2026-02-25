@@ -20,9 +20,10 @@ from ai_scanner_interfaces.msg import ObjectDetectionResult
 from ultralytics import YOLO
 from ultralytics.engine.results import Results
 
-class YOLO_Node(Node):
+
+class SurfaceSegmentorNode(Node):
     def __init__(self):
-        super().__init__('yolo_seg_det_node')
+        super().__init__('surface_segmentor_node')
         self.bridge = CvBridge()
 
         # --- load params ---
@@ -93,7 +94,7 @@ class YOLO_Node(Node):
         
         self.run_srv = self.create_service(
             Trigger,
-            'detect_tree',
+            'detect_surface',
             self.handle_run_inference
         )
 
@@ -132,12 +133,12 @@ class YOLO_Node(Node):
         masks = getattr(res.masks, 'data', None)    # (N,H,W) or None
 
         H, W = cv_img.shape[:2]
-        tree_detected = False
+        target_detected = False
         max_box_idx = -1
         max_box_score = -1
         for i, box in enumerate(boxes):
 
-            tree_detected = True
+            target_detected = True
 
             x1, y1, x2, y2 = box
             w, h = x2 - x1, y2 - y1
@@ -151,7 +152,7 @@ class YOLO_Node(Node):
                 max_box_score = w*h 
                 max_box_idx = i
 
-        if tree_detected:
+        if target_detected:
 
             box = boxes[max_box_idx]
             x1, y1, x2, y2 = box
@@ -206,7 +207,7 @@ class YOLO_Node(Node):
             img_msg.header.stamp = self.latest_img_msg.header.stamp
             self.vis_publisher.publish(img_msg)
 
-        return tree_detected
+        return target_detected
 
     def image_callback(self, msg: Image):
 
@@ -246,7 +247,7 @@ class YOLO_Node(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = YOLO_Node()
+    node = SurfaceSegmentorNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

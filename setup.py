@@ -47,7 +47,7 @@ setup(
             'gimbal_node = ai_scanner.gimbal_node:main',
             'gimbal_tracker = ai_scanner.gimbal_tracker:main',
             'color_detector = ai_scanner.color_detector:main',
-            'tree_trunk_detector = ai_scanner.tree_trunk_detector:main',
+            'surface_segmentor = ai_scanner.surface_segmentor:main',
             'px4_xrce_mission = ai_scanner.px4_xrce_mission:main',
             'gazebo_ros_bridge = ai_scanner.gazebo_ros_bridge:main'
         ],
