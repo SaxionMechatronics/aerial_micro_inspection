@@ -21,15 +21,15 @@ pipeline:
   det_mode:                   "ai"   # Options: ai, color
   planning_mode:              "sweeping" # Options: pitch_lock, pitch_yaw_lock, sweeping
   sweeping_overlap:           0.2
-  min_cell_occupancy:         0.8
+  min_cell_occupancy:         0.5
 
 surface_segmentation:
   confidence_threshold: 0.27                                          
   iou_threshold: 0.3
-  # target_class_id: 1   # Set to a non-negative class id to filter only that segment class
-  # path: "/ws/src/ai_scanner/weights/yolo11n_tree_seg_tuned.pt"  
-  target_class_id: 2   
-  path: "/ws/src/ai_scanner/weights/yolo11s-seg.pt"  
+  target_class_id: 0   # Set to a non-negative class id to filter only that segment class
+  path: "/ws/src/ai_scanner/weights/yolo11n_tree_seg_tuned.pt"  
+  # target_class_id: 2   
+  # path: "/ws/src/ai_scanner/weights/yolo11s-seg.pt"  
 
 color_segmentation:
   min_size: 10.0

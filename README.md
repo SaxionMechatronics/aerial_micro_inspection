@@ -67,6 +67,10 @@ To visualize:
 rviz2 -d /ws/src/ai_scanner/config/rviz_config.rviz
 ```
 
+Expected outcome in use case of tree trunk inspection to detect caterpillar eggs:
+
+![tree inspection](demo/tree_inspection.gif)
+
 ## 5. Real Test on Jetson Orin Nano
 
 ### 5.1 Setup
@@ -74,6 +78,9 @@ rviz2 -d /ws/src/ai_scanner/config/rviz_config.rviz
 Our real-flight tests used a dual-camera payload and onboard compute stack composed of a Holybro Pixhawk paired with a Jetson board as the main flight-control and processing unit. The cameras include a ZED2 stereo camera as the **navigation camera**, a Gremsy Pixy LR gimbal carrying a Sony ILX-LR1 as the **inspection camera** with a 55mm lens for zoomed inspection and 4 times software zooming. This hardware split is aligned with the pipeline design: wide-FOV perception and geometry from the nav camera, and high-detail micro target inspection from the gimbal-mounted inspection camera.
 
 ### 5.2 Calibrarion
+
+### 5.3 Experiment
+![EPR inspection](demo/real_test.gif)
 
 # Customization
 
@@ -118,9 +125,7 @@ rviz2 -d /ws/src/ai_scanner/config/rviz_config.rviz
 
 Expected outcome:
 
-<video controls style="width:100%; border-radius:12px;">
-  <source src="demo/car_inspection.webm" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+![car inspection](demo/car_inspection.gif)
+
 
 
