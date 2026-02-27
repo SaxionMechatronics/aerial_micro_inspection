@@ -33,7 +33,6 @@ class ColorDetector(Node):
         if not self.img_type in ['raw', 'rect']:
             raise ValueError("Parameter img_type can either be \'raw\' or \'rect\'.")
 
-        # HSV thresholds
         self.low_h = color_cfg['h_min'];  self.high_h = color_cfg['h_max']
         self.low_s = color_cfg['s_min'];  self.high_s = color_cfg['s_max']
         self.low_v = color_cfg['v_min'];  self.high_v = color_cfg['v_max']
@@ -77,7 +76,7 @@ class ColorDetector(Node):
 
     def img_cb(self, img_msg):
 
-        # We dont want to process images faster than 10 Hz
+        # No faster than 10 Hz
         now = self.get_clock().now()
         if now - self._last_time < Duration(seconds=0.1):
             return
@@ -85,7 +84,7 @@ class ColorDetector(Node):
         
         img   = self.bridge.imgmsg_to_cv2(img_msg,   'bgr8')
 
-        # threshold on HSV
+
         hsv   = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         lower = (self.low_h, self.low_s, self.low_v)
         upper = (self.high_h,self.high_s,self.high_v)
@@ -110,7 +109,6 @@ class ColorDetector(Node):
                 self.publish_detection_image(img, mask, img_msg.header.stamp)
             return
 
-        # Publishing the detection results. The result include the target segment and target bbox.
         det_msg = ObjectDetectionResult()
         det_msg.header.stamp = img_msg.header.stamp
         det_msg.mask = self.bridge.cv2_to_imgmsg(mask, 'mono8')

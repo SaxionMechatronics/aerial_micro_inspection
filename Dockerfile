@@ -94,8 +94,8 @@ RUN pip3 install --no-cache-dir --retries 10 --timeout 1000 \
             "transforms3d>=0.4.1" && \
         # Keep numpy at the tested version for tf_transformations/transforms3d compatibility.
         pip3 install --no-cache-dir --retries 10 --timeout 1000 --upgrade "numpy==1.26.4" && \
-        # Keep OpenCV Python below 4.12 for compatibility with current stack.
-        pip3 install --no-cache-dir --retries 10 --timeout 1000 --upgrade "opencv-python<4.12" && \
+        # Keep OpenCV contrib Python below 4.12 for compatibility and tracker backends (CSRT/KCF/MIL).
+        pip3 install --no-cache-dir --retries 10 --timeout 1000 --upgrade "opencv-contrib-python<4.12" && \
         python3 -c "import cv2; from packaging.version import Version; assert Version(cv2.__version__) < Version('4.12.0'), cv2.__version__"
 
 ARG PX4_MSGS_GIT_REF=

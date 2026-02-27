@@ -6,6 +6,7 @@ import numpy as np
 import threading
 import yaml
 import os
+from typing import Optional
 from scipy.spatial.transform import Rotation as R
 
 import rclpy
@@ -35,9 +36,9 @@ from ai_scanner.utils import load_yaml, quaternion_to_rotmat
 ##       Confluence documentation
 
 
-class ObjectTracker(Node):
+class GimbalTracker(Node):
     def __init__(self):
-        super().__init__('object_tracker')
+        super().__init__('gimbal_tracker')
         self.bridge = CvBridge()
 
         # ROS Parameters
@@ -48,7 +49,6 @@ class ObjectTracker(Node):
             self.config = yaml.safe_load(f)
         configs_dir  = self.get_parameter('configs_dir').value
 
-        # Load configurations
         output_cfg = self.config.get('output', {})
         input_cfg = self.config.get('input', {})
         pipeline_cfg = self.config.get('pipeline', {})
@@ -65,6 +65,9 @@ class ObjectTracker(Node):
         self.planning_mode = pipeline_cfg.get('planning_mode', self.config.get('planning', {}).get('mode', 'sweeping'))
         self.sweeping_overlap = float(pipeline_cfg.get('sweeping_overlap', 0.5))
         self.min_cell_occupancy = float(pipeline_cfg.get('min_cell_occupancy', 0.3))
+        self.enable_nav_tracker_mode = bool(pipeline_cfg.get('enable_nav_tracker_mode', False))
+        self.tracker_type = str(pipeline_cfg.get('tracker_type', 'medianflow')).lower()
+        self.wp_hold_time = float(pipeline_cfg.get('waypoint_hold_time', 2.0))
         self.vis_enabled = self.config['visualization']
         self.img_type = self.config['input']['img_type']
         runtime_cfg = self.config.get('runtime', {})
@@ -90,38 +93,24 @@ class ObjectTracker(Node):
         self.pitch_offset = float(calib['offset_pitch_deg'])
         # store inverse for mapping nav to gimbal_base
         self.T_nav_gb = np.linalg.inv(T_gb_nav)
-        self.nav_h = np.array(calib['nav_camera']['image_height'])
-        self.nav_w = np.array(calib['nav_camera']['image_width'])
+        self.nav_h = int(calib['nav_camera']['image_height'])
+        self.nav_w = int(calib['nav_camera']['image_width'])
 
-        best_effort_qos = QoSProfile(
-            depth=30,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.VOLATILE
+        self.det_subscription = self.create_subscription(
+            ObjectDetectionResult,
+            det_t,
+            self.cb_detection_only,
+            10
         )
-        
-        # synchronized subscribers: detection results, nav depth, ai img, gimbal
-        sub_det      = Subscriber(self, ObjectDetectionResult, det_t)
-        sub_depth    = Subscriber(self, Image,                 depth_t)
-        # sub_ai_image = Subscriber(self, Image,                 ai_img_t)
-        sub_gim      = Subscriber(self, QuaternionStamped,     gimbal_t)
-        # states_sub      = Subscriber(self, Odometry,     states_t, qos_profile=best_effort_qos)
-        # subs_list = [sub_det, sub_depth, sub_ai_image, sub_gim]
-        subs_list = [sub_det, sub_depth, sub_gim]
 
-        callback_function = self.cb_synced
-
-        # If realtime-correction is needed, also subscribe on nav image.
-        if self.rt_correction:
-            sub_nav_image = Subscriber(self, Image, nav_img_t)
-            subs_list.append(sub_nav_image)
-            callback_function = self.cb_synced_rt
-
-        self.sync = ApproximateTimeSynchronizer(
-            subs_list,
+        sub_nav = Subscriber(self, Image, nav_img_t)
+        sub_depth = Subscriber(self, Image, depth_t)
+        self.nav_depth_sync = ApproximateTimeSynchronizer(
+            [sub_nav, sub_depth],
             queue_size=30,
             slop=0.1
-        ) 
-        self.sync.registerCallback(callback_function)
+        )
+        self.nav_depth_sync.registerCallback(self.cb_nav_depth)
 
         self.subscription = self.create_subscription(
             Float32MultiArray,
@@ -134,180 +123,261 @@ class ObjectTracker(Node):
         self.image_publisher = self.create_publisher(Image, pln_img_t, 10)
 
         self.executing_trajectory = False
-        self.mask_gb = None
-        self.ps_gb = []
+        self.mask_latest = None
+        self.wins = []
         self.det_stamp = None
-        self.detection_updated = False
 
-        self.get_logger().info(f'ObjectTracker ready with {calib_p} config file.')
+        self.state_lock = threading.Lock()
+        self.base_wins = []
+        self.current_wp_idx = 0
+        self.active_wp_start_time: Optional[float] = None
+        self.allow_new_plan = True
+        self.pending_tracker_init_bbox = None
+        self.latest_tracked_bbox = None
+        self.tracker_ref_center = None
+        self.tracker_displacement = (0, 0)
+        self.cv_tracker = None
+        self.latest_det_msg = None
+
+        if self.enable_nav_tracker_mode:
+            self.get_logger().info('Tracker-driven nav mode enabled.')
+        else:
+            self.get_logger().info('Tracker-driven nav mode disabled: replanning on each detection without motion correction.')
+
+        self.get_logger().info(f'GimbalTracker ready with {calib_p} config file.')
 
 
     def gimbal_adjusments_callback(self, msg):
         self.pitch_offset += msg.data[0]
         self.yaw_offset += msg.data[1]
         
-    def cb_synced(self, det_msg, depth_msg, gimbal_stamped):
-        self.process(det_msg, depth_msg, gimbal_stamped)
+    def cb_detection_only(self, det_msg):
+        if self.planning_mode != "sweeping":
+            with self.state_lock:
+                self.latest_det_msg = det_msg
+            return
 
-    def cb_synced_rt(self, det_msg, depth_msg, gimbal_stamped, nav_msg):
-        self.process(det_msg, depth_msg, gimbal_stamped, nav_msg=nav_msg)
+        if self.enable_nav_tracker_mode:
+            with self.state_lock:
+                if not self.allow_new_plan:
+                    return
 
-    def process(self, det_msg, depth_msg, gimbal_stamped, nav_msg=None):
-        # decode messages
-        # ai_img = self.bridge.imgmsg_to_cv2(ai_msg,   'bgr8')
-        depth = self.bridge.imgmsg_to_cv2(depth_msg, '32FC1')
+        if not (det_msg.img_w == self.nav_w and det_msg.img_h == self.nav_h):
+            raise ValueError('The detection image size should match the calibrated NAV image size.')
 
-        if not (depth.shape[1] == self.nav_w and depth.shape[0] == self.nav_h and \
-               det_msg.img_w == self.nav_w   and det_msg.img_h == self.nav_h):
-            raise ValueError(f"The depth and are RGB image (source for object detection) size should \
-                               match the calibrated camera image size.")
-                
-        # if self.vis_enabled:
-        #     # The transformation from gimbal's end point to the gimbal's base frame.
-        #     # The base frame is assumed to be attached to the robot's body and the gimbal orientation message
-        #     # should contain gimbal's orientation w.r.t the base.
-        #     gim_q = gimbal_stamped.quaternion
-        #     Rg = quaternion_to_rotmat(gim_q)
-        #     T_gimbal_to_gimbalbase = np.eye(4); T_gimbal_to_gimbalbase[:3,:3]=Rg
+        win = self.get_ai_image_size_on_nav_image(self.ai_img_shape)
+        mask = self.bridge.imgmsg_to_cv2(det_msg.mask, 'mono8')
+        wins, _ = self.sweep(
+            depth=None,
+            mask=mask,
+            window_size=win,
+            overlap=self.sweeping_overlap,
+            threshold=self.min_cell_occupancy,
+            compute_points=False
+        )
 
-        #     # Transformation to take from camera coordinates to gimbal base
-        #     T_ai_to_gimbal = np.array([[0, 0, 1, 0],
-        #                             [1, 0, 0, 0],
-        #                             [0, 1, 0, 0],
-        #                             [0, 0, 0, 1]])
-        #     T_ai_to_gimbalbase = T_gimbal_to_gimbalbase.dot(T_ai_to_gimbal)
-        #     # project the detected object on gimbaled camera image
-        #     gimbal_front = np.array([
-        #         [x,y,z],
-        #     ], dtype=np.float32)
-        #     T_gimbalbase_to_ai = np.linalg.inv(T_ai_to_gimbalbase)
-        #     pts4 = T_gimbalbase_to_ai[:3,:3] @ gimbal_front.T + T_gimbalbase_to_ai[:3,3:4] 
-        #     uv, _ = cv2.projectPoints(
-        #         pts4.T, np.zeros(3), np.zeros(3), self.ai_K, self.ai_D
-        #     ) 
-        #     uv = uv.reshape(-1,2).astype(int) 
-        #     # cv2.polylines(ai_img, [uv.reshape(-1,1,2)], True, (0,255,0), 2)
-        #     for i, p in enumerate(uv):
-        #         cv2.circle(ai_img, p, (len(uv) - i)*5, (0,255,0), -1)
-        #         # cv2.rectangle(ai_img, (int(p[0]-w_ai/2), int(p[1]-h_ai/2)), (int(p[0]+w_ai/2), int(p[1]+h_ai/2)), (0,0,255), 2)
+        if len(wins) == 0:
+            return
 
-        #     # annotate
-        #     cv2.imshow('AI', ai_img)
-        #     cv2.waitKey(1)
-
-        if self.planning_mode == "sweeping":
-
-            # self.last_odom = odom_msg
-            
-            win = self.get_ai_image_size_on_nav_image(self.ai_img_shape)
-            mask = self.bridge.imgmsg_to_cv2(det_msg.mask, 'mono8')
-
-            self.wins, self.ps_gb = self.sweep(
-                depth,
-                mask,
-                win,
-                overlap=self.sweeping_overlap,
-                threshold=self.min_cell_occupancy
-            )
-            # self.ps_gb = self.transform_to_map(self.ps_gb, odom_msg)
-            self.mask_gb = mask.copy()
-
-            self.det_stamp = det_msg.header.stamp
-
-            if self.executing_trajectory:
-                self.detection_updated = True
+        init_bbox = None
+        if self.enable_nav_tracker_mode:
+            init_bbox = self._sanitize_xywh((det_msg.x, det_msg.y, det_msg.w, det_msg.h))
+            if init_bbox[2] <= 1 or init_bbox[3] <= 1:
+                self.get_logger().info('Detection bbox too small for tracker initialization.')
                 return
 
-            t = threading.Thread(target=self.execute_gimbal_trajectory)
-            t.start()
+        with self.state_lock:
+            self.base_wins = wins
+            self.wins = list(wins)
+            self.mask_latest = mask.copy()
+            if self.enable_nav_tracker_mode:
+                self.current_wp_idx = 0
+                self.active_wp_start_time = None
+            self.det_stamp = det_msg.header.stamp
+            self.pending_tracker_init_bbox = init_bbox
+            self.latest_tracked_bbox = None
+            self.tracker_ref_center = None
+            self.tracker_displacement = (0, 0)
+            self.cv_tracker = None
+            self.executing_trajectory = True
+            self.allow_new_plan = not self.enable_nav_tracker_mode
 
-            # cv2.imshow("Bottom→Top Boxes", vis)
-            # cv2.waitKey(0)
+    def cb_nav_depth(self, nav_msg, depth_msg):
+        nav_img = self.bridge.imgmsg_to_cv2(nav_msg, 'bgr8')
+        depth = self.bridge.imgmsg_to_cv2(depth_msg, '32FC1')
 
-        elif self.planning_mode == "pitch_yaw_lock":
-            p_gb = self.point_towards_box(depth, (det_msg.x, det_msg.y, det_msg.w, det_msg.h))            
-            if p_gb is None:
-                return 
-            self.publish_orientation(p_gb, det_msg.header.stamp)
+        if not (depth.shape[1] == self.nav_w and depth.shape[0] == self.nav_h and
+                nav_img.shape[1] == self.nav_w and nav_img.shape[0] == self.nav_h):
+            raise ValueError('The NAV RGB and depth image sizes should match the calibrated NAV image size.')
 
-        elif self.planning_mode == "pitch_lock":
+        if self.planning_mode != "sweeping":
+            with self.state_lock:
+                det_msg = self.latest_det_msg
 
-            win_w, _ = self.get_ai_image_size_on_nav_image(self.ai_img_shape)
-            win_w = 2*win_w
-            mask = self.bridge.imgmsg_to_cv2(det_msg.mask, 'mono8')
+            if det_msg is None:
+                return
 
-            # Keep the heading aligned with body
-            p_gb = self.point_towards_box(depth, self.largest_center_strip_bbox(mask, win_w))
-            
-            if p_gb is None:
-                return 
-            self.publish_orientation(p_gb, det_msg.header.stamp)
+            if self.planning_mode == "pitch_yaw_lock":
+                p_gb = self.point_towards_box(depth, (det_msg.x, det_msg.y, det_msg.w, det_msg.h))
+                if p_gb is None:
+                    return
+                self.publish_orientation(p_gb, nav_msg.header.stamp)
+                return
 
-        # if nav_msg is not None:
-        #     nav_img = self.bridge.imgmsg_to_cv2(nav_msg, 'bgr8')
+            if self.planning_mode == "pitch_lock":
+                win_w, _ = self.get_ai_image_size_on_nav_image(self.ai_img_shape)
+                win_w = 2 * win_w
+                mask = self.bridge.imgmsg_to_cv2(det_msg.mask, 'mono8')
+                box = self.largest_center_strip_bbox(mask, win_w)
+                if box is None:
+                    return
+                p_gb = self.point_towards_box(depth, box)
+                if p_gb is None:
+                    return
+                self.publish_orientation(p_gb, nav_msg.header.stamp)
+            return
 
-        #     proj_w, proj_h = self.get_ai_image_size_on_nav_image(ai_img.shape[:2])
+        with self.state_lock:
+            if not self.executing_trajectory:
+                return
 
-        #     search_w = int(proj_w * 2)
-        #     search_h = int(proj_h * 2)
+            tracked_bbox = None
+            if self.enable_nav_tracker_mode:
+                if self.cv_tracker is None:
+                    if self.pending_tracker_init_bbox is None:
+                        return
+                    tracker = self._create_opencv_tracker()
+                    if tracker is None:
+                        self._reset_active_plan('No OpenCV tracker backend available.')
+                        return
 
-        #     # self.get_logger().info(f"Search zone size: {(search_w, search_h)}")
+                    init_bbox = tuple(int(v) for v in self.pending_tracker_init_bbox)
+                    self.get_logger().info(f'Initializing tracker with bbox: {init_bbox}')
+                    ok = tracker.init(nav_img, init_bbox)
 
-        #     # Use detection center (cx, cy) as center
-        #     center_x, center_y = cx, cy
-        #     x1 = max(0, center_x - search_w // 2)
-        #     y1 = max(0, center_y - search_h // 2)
-        #     x2 = min(nav_img.shape[1], center_x + search_w // 2)
-        #     y2 = min(nav_img.shape[0], center_y + search_h // 2)
+                    if not ok:
+                        self._reset_active_plan('Failed to initialize visual tracker on NAV image.')
+                        return
+                    self.cv_tracker = tracker
+                    x, y, w, h = init_bbox
+                    self.tracker_ref_center = (x + 0.5 * w, y + 0.5 * h)
+                    self.latest_tracked_bbox = init_bbox
 
-        #     # search_zone = nav_img[y1:y2, x1:x2]
+                ok, tracked_bbox = self.cv_tracker.update(nav_img)
+                if not ok:
+                    self._reset_active_plan('Tracker lost target; waiting for a new detection plan.')
+                    return
 
-        #     # # Resize ai_img to estimated projection size
-        #     ai_img_resized = cv2.resize(ai_img, (proj_w, proj_h))
+                tracked_bbox = self._sanitize_xywh(tracked_bbox)
+                self.latest_tracked_bbox = tracked_bbox
 
-        #     # # --- Match resized AI image inside NAV search zone ---
-        #     # if search_zone.shape[0] < ai_img_resized.shape[0] or search_zone.shape[1] < ai_img_resized.shape[1]:
-        #     #     self.get_logger().warn("Search zone is smaller than AI image, skipping matching")
-        #     #     return
+                cx = tracked_bbox[0] + 0.5 * tracked_bbox[2]
+                cy = tracked_bbox[1] + 0.5 * tracked_bbox[3]
+                dx = int(round(cx - self.tracker_ref_center[0]))
+                dy = int(round(cy - self.tracker_ref_center[1]))
+            else:
+                dx, dy = 0, 0
 
-        #     # # Convert to grayscale for matchTemplate
-        #     # gray_ai   = cv2.cvtColor(ai_img_resized, cv2.COLOR_BGR2GRAY)
-        #     # gray_nav  = cv2.cvtColor(search_zone, cv2.COLOR_BGR2GRAY)
+            self.tracker_displacement = (dx, dy)
 
-        #     # result = cv2.matchTemplate(gray_nav, gray_ai, cv2.TM_CCOEFF_NORMED)
-        #     # _, max_val, _, max_loc = cv2.minMaxLoc(result)
+            self.wins = self._shift_wins(self.base_wins, dx, dy, self.nav_w, self.nav_h)
+            if len(self.wins) == 0:
+                self._reset_active_plan('No valid shifted sweep windows remain.')
+                return
 
-        #     # match_top_left = (max_loc[0] + x1, max_loc[1] + y1)
+            if self.current_wp_idx >= len(self.wins):
+                self._reset_active_plan('Finished all sweep windows.')
+                return
 
-        #     # --- Paste resized AI image directly into nav image ---
-        #     blended = nav_img.copy()
-        #     mh, mw = ai_img_resized.shape[:2]
-        #     match_top_left = (center_x + x1, center_y + y1)
-        #     x, y = match_top_left
+            now = time.time()
+            if self.active_wp_start_time is None:
+                self.active_wp_start_time = now
 
-        #     # Ensure bounds
-        #     x_end = min(x + mw, blended.shape[1])
-        #     y_end = min(y + mh, blended.shape[0])
-        #     roi = blended[y:y_end, x:x_end]
-        #     ai_crop = ai_img_resized[:y_end - y, :x_end - x]
+            x0, y0, x1, y1 = self.wins[self.current_wp_idx]
+            p_gb = self.point_towards_box(depth, (x0, y0, x1 - x0, y1 - y0))
 
-        #     # Blend with transparency
-        #     alpha = 0.8
-        #     blended[y:y_end, x:x_end] = ai_crop
-        #     cv2.rectangle(blended, (x, y), (x + mw, y + mh), color=(0, 255, 0), thickness=2)
+            self._publish_sweep_visualization(self.current_wp_idx, tracked_bbox=tracked_bbox)
 
+            if p_gb is not None:
+                self.publish_orientation(p_gb, nav_msg.header.stamp)
 
-        #     # --- Publish result ---
-        #     patched_msg = self.bridge.cv2_to_imgmsg(blended, encoding='bgr8')
-        #     patched_msg.header.stamp = self.get_clock().now().to_msg()
-        #     patched_msg.header.frame_id = 'camera_link'
-        #     self.image_publisher.publish(patched_msg)
+            if (now - self.active_wp_start_time) >= self.wp_hold_time:
+                self.current_wp_idx += 1
+                self.active_wp_start_time = now
+                if self.current_wp_idx >= len(self.wins):
+                    self._reset_active_plan('Finished all sweep windows.')
 
-        #     # Store transform (only translation in this case)
-        #     self.last_transform = np.array([
-        #         [1.0, 0.0, float(x)],
-        #         [0.0, 1.0, float(y)]
-        #     ], dtype=np.float32)
+    def _create_opencv_tracker(self):
+        tracker_builders = {
+            'csrt': ['TrackerCSRT_create'],
+            'kcf': ['TrackerKCF_create'],
+            'mil': ['TrackerMIL_create'],
+            'mosse': ['TrackerMOSSE_create'],
+            'medianflow': ['TrackerMedianFlow_create'],
+            'boosting': ['TrackerBoosting_create'],
+            'tld': ['TrackerTLD_create'],
+        }
+
+        preferred = self.tracker_type if self.tracker_type in tracker_builders else 'csrt'
+        search_order = [preferred, 'csrt', 'kcf', 'mosse', 'medianflow', 'boosting', 'tld']
+
+        seen = set()
+        for tracker_name in search_order:
+            if tracker_name in seen:
+                continue
+            seen.add(tracker_name)
+
+            for ctor_name in tracker_builders[tracker_name]:
+                ctor = getattr(cv2, ctor_name, None)
+                if ctor is not None:
+                    self.get_logger().info(f'Using OpenCV tracker backend: {tracker_name}')
+                    return ctor()
+
+                legacy = getattr(cv2, 'legacy', None)
+                if legacy is not None:
+                    legacy_ctor = getattr(legacy, ctor_name, None)
+                    if legacy_ctor is not None:
+                        self.get_logger().info(f'Using OpenCV tracker backend: {tracker_name} (legacy)')
+                        return legacy_ctor()
+
+        return None
+
+    def _sanitize_xywh(self, bbox):
+        x, y, w, h = [int(round(v)) for v in bbox]
+        x = max(0, min(x, self.nav_w - 1))
+        y = max(0, min(y, self.nav_h - 1))
+        w = max(0, min(w, self.nav_w - x))
+        h = max(0, min(h, self.nav_h - y))
+        return (x, y, w, h)
+
+    def _shift_wins(self, wins, dx, dy, width, height):
+        shifted = []
+        for x0, y0, x1, y1 in wins:
+            w = x1 - x0
+            h = y1 - y0
+            sx0 = max(0, min(x0 + dx, width - w))
+            sy0 = max(0, min(y0 + dy, height - h))
+            sx1 = sx0 + w
+            sy1 = sy0 + h
+            if sx1 <= sx0 or sy1 <= sy0:
+                continue
+            shifted.append((sx0, sy0, sx1, sy1))
+        return shifted
+
+    def _reset_active_plan(self, reason=''):
+        if reason:
+            self.get_logger().info(reason)
+        self.executing_trajectory = False
+        self.allow_new_plan = True
+        self.base_wins = []
+        self.wins = []
+        self.current_wp_idx = 0
+        self.active_wp_start_time = None
+        self.pending_tracker_init_bbox = None
+        self.latest_tracked_bbox = None
+        self.tracker_ref_center = None
+        self.tracker_displacement = (0, 0)
+        self.cv_tracker = None
 
     def largest_center_strip_bbox(self, mask: np.ndarray, win_w: int):
 
@@ -360,50 +430,40 @@ class ObjectTracker(Node):
         return (proj_w, proj_h)
     
     def sweep(self,
-          depth: np.ndarray,
+                    depth: Optional[np.ndarray],
           mask: np.ndarray,
           window_size: tuple[int,int],
           overlap: float = 0.1,
           threshold: float = 0.7,
-          visualize: bool = False
+                    visualize: bool = False,
+                    compute_points: bool = True
          ) -> list[tuple[int,int,int,int]]:
-        """
-        Slide a window over the white area of a binary mask, bottom→top, keeping
-        only windows at least `threshold` full of white.
 
-        Args:
-        mask:        H×W mono8 image (0 or 255) where 255 is “white”.
-        window_size: (width, height) of the sliding box in pixels.
-        overlap:     Fractional overlap between adjacent windows [0..1).
-        threshold:   Fraction (0..1) of pixels that must be white to keep the box.
-
-        Returns:
-        List of (x0,y0,x1,y1) windows, iterated bottom→top, left→right.
-        """
+        if compute_points and depth is None:
+                raise ValueError('Depth image is required when compute_points=True in sweep().')
+        
         win_w, win_h = window_size
         area = win_w * win_h
 
-        # 1) Find tight white‐pixel bbox
+        # Find tight white‐pixel bbox
         ys, xs = np.where(mask > 0)
         if ys.size == 0:
             return [], []
         x_min, x_max = xs.min(), xs.max()
         y_min, y_max = ys.min() - int(win_h/2), ys.max() + int(win_h/2)
 
-        # 2) Compute step sizes
+        # Compute step sizes
         step_x = max(1, int(win_w * (1.0 - overlap)))
         step_y = max(1, int(win_h * (1.0 - overlap)))
 
-        # 3) Precompute all x0 positions (left→right)
         x0_list = []
         for x in range(x_min, x_max + 1, step_x):
             x0 = min(x, x_max - win_w)
             x0 = max(0, x0)
             x0_list.append(x0)
-        # remove duplicates but keep order
         x0_list = list(dict.fromkeys(x0_list))
 
-        # 4) Precompute all y0 positions (top→bottom), then reverse to bottom→top
+        # Precompute all y0 positions (top to bottom), then reverse to bottom to top
         y0_list = []
         for y in range(y_min, y_max + 1, step_y):
             y0 = min(y, y_max - win_h)
@@ -414,8 +474,9 @@ class ObjectTracker(Node):
         points_gb = []
         boxes = []
         counter = 1
-        # cv2.imwrite(f"/home/sarax/Desktop/debug/{0}.png", mask)
-        # 5) Sweep bottom→top, left→right
+
+        
+        # Sweep bottom to top, left to right
         # self.get_logger().info(f'\n\n')
         for y0 in y0_list:
             y1 = y0 + win_h
@@ -425,78 +486,44 @@ class ObjectTracker(Node):
                 count_white = np.count_nonzero(mask[y0:y1, x0:x1])
                 if count_white >= threshold * area:
                     boxes.append((x0, y0, x1, y1))
-                    # self.get_logger().info(f'depth: {depth.shape}, mask: {mask.shape}')
-                    curr_mask = np.zeros(depth.shape, dtype=np.uint8)
-                    curr_mask[y0:y1, x0:x1] = mask[y0:y1, x0:x1].copy()
-                    # cv2.imwrite(f"/home/sarax/Desktop/debug/{counter}.png", curr_mask)
-                    p_gb = self.point_towards_box(depth, (x0, y0, win_w, win_h), mask=curr_mask)
-                    
-                    points_gb.append(p_gb)
+                    if compute_points:
+                        # self.get_logger().info(f'depth: {depth.shape}, mask: {mask.shape}')
+                        curr_mask = np.zeros(depth.shape, dtype=np.uint8)
+                        curr_mask[y0:y1, x0:x1] = mask[y0:y1, x0:x1].copy()
+                        p_gb = self.point_towards_box(depth, (x0, y0, win_w, win_h), mask=curr_mask)
+                        points_gb.append(p_gb)
                     counter += 1
 
 
         return boxes, points_gb
-    
-    def execute_gimbal_trajectory(self, wait_time=2.0):
 
-        self.executing_trajectory = True
-        wp_counter = 0
-        end_counter = 0
-        if len(self.ps_gb) == 0:
+    def _publish_sweep_visualization(self, wp_counter, tracked_bbox=None):
+        if self.mask_latest is None:
             return
-        
-        prev_box_time = time.time()
-        while True:
-            if wp_counter >= len(self.ps_gb):
-                break
-                # end_counter += 1
-                # wp_counter = len(self.ps_gb) - 2
 
-            p_gb = self.ps_gb[wp_counter]
-            # p_gb = self.inverse_transform_point(p_gb, self.last_odom)
+        vis = cv2.cvtColor(self.mask_latest, cv2.COLOR_GRAY2BGR)
 
-            # Visualize the segment breaking.
-            if self.mask_gb is not None:
-                vis = cv2.cvtColor(self.mask_gb, cv2.COLOR_GRAY2BGR)
-                # Draw all non-active windows first, then draw active window last to keep it on top.
-                for idx, (x0, y0, x1, y1) in enumerate(self.wins):
-                    if idx != wp_counter:
-                        cv2.rectangle(vis, (x0, y0), (x1, y1), (0,0,255), 2)
+        for idx, (x0, y0, x1, y1) in enumerate(self.wins):
+            if idx != wp_counter:
+                cv2.rectangle(vis, (x0, y0), (x1, y1), (0, 0, 255), 2)
 
-                if 0 <= wp_counter < len(self.wins):
-                    x0, y0, x1, y1 = self.wins[wp_counter]
-                    cv2.rectangle(vis, (x0, y0), (x1, y1), (0,255,0), 2)
+        if 0 <= wp_counter < len(self.wins):
+            x0, y0, x1, y1 = self.wins[wp_counter]
+            cv2.rectangle(vis, (x0, y0), (x1, y1), (0, 255, 0), 2)
 
-                if self.downsample_visualization:
-                    vis_out = cv2.resize(vis, (self.vis_output_width, self.vis_output_height))
-                else:
-                    vis_out = vis
+        if tracked_bbox is not None:
+            tx, ty, tw, th = tracked_bbox
+            cv2.rectangle(vis, (tx, ty), (tx + tw, ty + th), (255, 255, 0), 2)
 
-                patched_msg = self.bridge.cv2_to_imgmsg(vis_out, encoding='bgr8')
-                patched_msg.header.stamp = self.get_clock().now().to_msg()
-                self.image_publisher.publish(patched_msg)
+        if self.downsample_visualization:
+            vis_out = cv2.resize(vis, (self.vis_output_width, self.vis_output_height))
+        else:
+            vis_out = vis
 
-            interrupted = False
-            while time.time() - prev_box_time <= wait_time:
-
-                if self.detection_updated:
-                    self.detection_updated = False
-                    interrupted = True
-                    break
-                
-                self.publish_orientation(p_gb, self.det_stamp)
-                time.sleep(0.03)
-            if not interrupted:
-                prev_box_time = time.time()
-
-                wp_counter += 1
-
-            # if end_counter > 2:
-            #     break
-
-        self.executing_trajectory = False
-        
-
+        patched_msg = self.bridge.cv2_to_imgmsg(vis_out, encoding='bgr8')
+        patched_msg.header.stamp = self.get_clock().now().to_msg()
+        self.image_publisher.publish(patched_msg)
+    
     def publish_orientation(self, p_gb, scan_stamp, noise=0.0):
 
         if p_gb is None: 
@@ -566,7 +593,7 @@ class ObjectTracker(Node):
         
 def main(args=None):
     rclpy.init(args=args)
-    node = ObjectTracker()
+    node = GimbalTracker()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

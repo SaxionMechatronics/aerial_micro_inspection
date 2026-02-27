@@ -69,7 +69,7 @@ rviz2 -d /ws/src/ai_scanner/config/rviz_config.rviz
 
 Expected outcome in use case of tree trunk inspection to detect caterpillar eggs:
 
-![tree inspection](demo/tree_inspection.gif)
+![tree inspection](demo/tree_inspection1.gif)
 
 ## 5. Real Test on Jetson Orin Nano
 
@@ -125,7 +125,7 @@ rviz2 -d /ws/src/ai_scanner/config/rviz_config.rviz
 
 Expected outcome:
 
-![car inspection](demo/car_inspection.gif)
+![car inspection](demo/car_inspection1.gif)
 
 
 

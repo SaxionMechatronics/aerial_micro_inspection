@@ -45,10 +45,9 @@ class DualCameraApril(Node):
         self.declare_parameter('aruco_yaml', 'config/aruco.yaml')
         self.declare_parameter('gimbal_topic', '/gimbal_orientation')
         self.declare_parameter('visualize', False)
-        self.declare_parameter('sync_slop', 0.2)  # seconds tolerance
+        self.declare_parameter('sync_slop', 0.2) 
         
 
-        # fetch
         ai_img_t   = self.get_parameter('ai_image_topic').value
         ai_yaml_p  = self.get_parameter('ai_camera_info_yaml').value
         ai_info_t  = self.get_parameter('ai_camera_info_topic').value
@@ -63,13 +62,11 @@ class DualCameraApril(Node):
         self.visualize = self.get_parameter('visualize').value
         self.slop      = self.get_parameter('sync_slop').value
 
-        # load
         self.ai_yaml    = load_yaml(ai_yaml_p)
         self.nav_yaml   = load_yaml(nav_yaml_p)
         self.aruco_cfg = load_yaml(aruco_p)
 
 
-        # validate
         if not self.ai_yaml and not ai_info_t:
             self.get_logger().error("ai_camera needs ai_camera_info_yaml or ai_camera_info_topic")
             rclpy.shutdown(); sys.exit(1)
@@ -101,7 +98,6 @@ class DualCameraApril(Node):
             self.aruco_dict   = cv2.aruco.getPredefinedDictionary(aruco_dict_id)
             self.aruco_params = cv2.aruco.DetectorParameters_create()
 
-        # synchronized subscribers
         sub_ai    = Subscriber(self, Image,            ai_img_t)
         sub_nav   = Subscriber(self, Image,            nav_img_t)
         sub_gimbal= Subscriber(self, QuaternionStamped, gimbal_t)
@@ -113,12 +109,10 @@ class DualCameraApril(Node):
         )
         self.sync.registerCallback(self.cb_synced)
 
-        # nav camera info
         self.last_nav_info = None
         if self.use_nav_info:
             self.create_subscription(CameraInfo, nav_info_t, self._nav_info_cb, 10)
 
-        # visualization
         if self.visualize:
             cv2.namedWindow('AI Camera',  cv2.WINDOW_NORMAL)
             cv2.namedWindow('Nav Camera', cv2.WINDOW_NORMAL)
@@ -137,7 +131,6 @@ class DualCameraApril(Node):
     #     super().destroy_node()
 
     def _compute_average_transform(self, Ts):
-        # Ts: list of 4×4 numpy arrays
         # average translation
         translations = np.stack([T[:3,3] for T in Ts], axis=0)
         mean_t       = translations.mean(axis=0)
@@ -161,7 +154,7 @@ class DualCameraApril(Node):
     
     def _save_yaml(self, avg_T, filename='camera_calib.yaml'):
         def reshape_and_cast(k_flat):
-            """Turn length-9 iterable into 3×3 list of Python floats."""
+            
             flat = [float(x) for x in k_flat]
             return [
                 flat[0:3],
@@ -169,7 +162,7 @@ class DualCameraApril(Node):
                 flat[6:9],
             ]
         def cast_list(lst):
-            """Cast any iterable of numbers to a list of Python floats."""
+            
             return [float(x) for x in lst]
         
         def extract_cam_params(yaml_cfg, last_info, topic_param):
@@ -258,25 +251,17 @@ class DualCameraApril(Node):
         # cv2.imshow('Nav Camera', img_nav)
         # cv2.waitKey(1)
 
-        # if either had no pose, skip transform
         if not ok1 or not ok2:
             return
 
-        # compute inter-camera transform
-        # build full 4×4 from rvec/tvec
         def to_T(rvec, tvec):
             R, _ = cv2.Rodrigues(rvec)
             T = np.eye(4); T[:3,:3]=R; T[:3,3]=tvec.flatten()
             return T
 
-        # The outputs of the SolvePnP alway show the target in camera frame.
-        # In other words, they show how to move and rotate camera to get to target frame.
-        # Thus, the transformations calculated from these values will transform a point from target frame to camera frame.
         T_target_to_ai = to_T(r1, t1)
         T_target_to_nav = to_T(r2, t2)
 
-        # For localization purposes, the following transform is more useful where it shows how to get from target coordinates to camera pose.
-        # i.e, it shows camera pose in target frame.
         T_ai_to_target = np.linalg.inv(T_target_to_ai)
 
         # Direct transformation between the two cameras at this moment. This transformation depends on the gimbal orientation.

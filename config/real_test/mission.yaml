@@ -22,6 +22,8 @@ pipeline:
   planning_mode:              "sweeping" # Options: pitch_lock, pitch_yaw_lock, sweeping
   sweeping_overlap:           0.5
   min_cell_occupancy:         0.3
+  enable_nav_tracker_mode:    true
+  waypoint_hold_time:         2.0
 
 surface_segmentation:
   confidence_threshold: 0.27                                          
