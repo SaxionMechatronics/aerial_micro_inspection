@@ -15,7 +15,7 @@ import numpy as np
 from cv_bridge import CvBridge
 from std_srvs.srv import Trigger
 from sensor_msgs.msg import Image
-from ai_scanner_interfaces.msg import ObjectDetectionResult
+from aerial_micro_inspection_interfaces.msg import ObjectDetectionResult
 
 from ultralytics import YOLO
 from ultralytics.engine.results import Results

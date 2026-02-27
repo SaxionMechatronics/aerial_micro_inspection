@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>ai_scanner</name>
+  <name>aerial_micro_inspection</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="sarax@todo.todo">sarax</maintainer>
@@ -12,7 +12,7 @@
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
 
-  <depend>ai_scanner_interfaces</depend>
+  <depend>aerial_micro_inspection_interfaces</depend>
   <exec_depend>ros_ign_gazebo</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>px4_msgs</exec_depend>

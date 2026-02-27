@@ -59,12 +59,12 @@ class MicroDetectorNode(Node):
         if os.path.isabs(configured_path):
             return configured_path
 
-        pkg_share = get_package_share_directory('ai_scanner')
+        pkg_share = get_package_share_directory('aerial_micro_inspection')
         share_candidate = os.path.join(pkg_share, configured_path)
         if os.path.exists(share_candidate):
             return share_candidate
 
-        ws_candidate = os.path.join('/ws/src/ai_scanner', configured_path)
+        ws_candidate = os.path.join('/ws/src/aerial_micro_inspection', configured_path)
         if os.path.exists(ws_candidate):
             return ws_candidate
 

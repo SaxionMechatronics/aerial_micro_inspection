@@ -10,12 +10,12 @@ from launch_ros.actions import Node, SetParameter
 
 
 def generate_launch_description():
-    ai_scanner_share = get_package_share_directory('ai_scanner')
+    aerial_micro_inspection_share = get_package_share_directory('aerial_micro_inspection')
 
-    worlds_dir = '/ws/src/ai_scanner/simulation/gazebo/worlds/'
-    world_path = '/ws/src/ai_scanner/simulation/gazebo/worlds/tree_car_world.sdf'
+    worlds_dir = '/ws/src/aerial_micro_inspection/simulation/gazebo/worlds/'
+    world_path = '/ws/src/aerial_micro_inspection/simulation/gazebo/worlds/tree_car_world.sdf'
     world_name = 'tree_car_world' 
-    sim_script_path = '/ws/src/ai_scanner/simulation/gazebo/scripts/simulation-gazebo'
+    sim_script_path = '/ws/src/aerial_micro_inspection/simulation/gazebo/scripts/simulation-gazebo'
 
     # --- Launch args ---
     px4_dir_arg = DeclareLaunchArgument('px4_dir', default_value='/opt/PX4-Autopilot')
@@ -51,9 +51,9 @@ def generate_launch_description():
             [
                 'cd ', px4_dir,
                 # Apply local airframe overrides right before PX4 start.
-                ' && cp /ws/src/ai_scanner/simulation/gazebo/px4_airframe/2026_gz_x500_inspection '
+                ' && cp /ws/src/aerial_micro_inspection/simulation/gazebo/px4_airframe/2026_gz_x500_inspection '
                 '/opt/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/',
-                ' && python3 /ws/src/ai_scanner/simulation/gazebo/px4_airframe/modify_px4.py',
+                ' && python3 /ws/src/aerial_micro_inspection/simulation/gazebo/px4_airframe/modify_px4.py',
                 ' && export PX4_GZ_MODEL_POSE=', px4_gz_model_pose,
                 ' && export PX4_GZ_STANDALONE=1',
                 ' && export PX4_GZ_WORLD=', world_name,
@@ -83,7 +83,7 @@ def generate_launch_description():
         output='screen'
     )
 
-    pkg_share = get_package_share_directory("ai_scanner") 
+    pkg_share = get_package_share_directory("aerial_micro_inspection") 
 
     bridge = Node(
         package="ros_gz_bridge",
@@ -105,7 +105,7 @@ def generate_launch_description():
 
 
     mission_node = Node(
-        package='ai_scanner',
+        package='aerial_micro_inspection',
         executable='px4_xrce_mission',
         name='px4_xrce_mission',
         output='screen',

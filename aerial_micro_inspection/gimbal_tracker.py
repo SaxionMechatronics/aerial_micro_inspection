@@ -18,12 +18,12 @@ from sensor_msgs.msg import Image
 from geometry_msgs.msg import QuaternionStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Float32MultiArray
-from ai_scanner_interfaces.msg import ObjectDetectionResult
+from aerial_micro_inspection_interfaces.msg import ObjectDetectionResult
 from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 
 
-from ai_scanner.utils import load_yaml, quaternion_to_rotmat
+from aerial_micro_inspection.utils import load_yaml, quaternion_to_rotmat
 
 ## TODO: 
 ##       Publish the tf for all frames

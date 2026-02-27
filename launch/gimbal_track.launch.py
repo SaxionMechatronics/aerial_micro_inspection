@@ -9,7 +9,7 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
 
-    pkg_share = get_package_share_directory('ai_scanner')
+    pkg_share = get_package_share_directory('aerial_micro_inspection')
 
     # resolve your config files
     calib_yaml    = os.path.join(pkg_share, 'config', 'real_test', 'cameras_calib.yaml')
@@ -38,7 +38,7 @@ def generate_launch_description():
 
     # Node
     tracker_node = Node(
-        package='ai_scanner',
+        package='aerial_micro_inspection',
         executable='gimbal_tracker',
         name='gimbal_tracker',
         output='screen',
@@ -51,7 +51,7 @@ def generate_launch_description():
     )
 
     detector_node = Node(
-        package='ai_scanner',
+        package='aerial_micro_inspection',
         executable='color_detector',
         name='color_detector',
         output='screen',

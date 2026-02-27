@@ -8,10 +8,10 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
 def generate_launch_description():
-    ai_scanner_share = get_package_share_directory('ai_scanner')
+    aerial_micro_inspection_share = get_package_share_directory('aerial_micro_inspection')
     ros_ign_gazebo_share = get_package_share_directory('ros_ign_gazebo')
 
-    worlds_dir = os.path.join(ai_scanner_share, 'simulation', 'gazebo', 'worlds')
+    worlds_dir = os.path.join(aerial_micro_inspection_share, 'simulation', 'gazebo', 'worlds')
     world_path = os.path.join(worlds_dir, 'tree_car_world.sdf')
 
     current_ign_resource_path = os.environ.get('IGN_GAZEBO_RESOURCE_PATH', '')

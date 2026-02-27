@@ -6,7 +6,7 @@ import yaml
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from ai_scanner_interfaces.msg import ObjectDetectionResult
+from aerial_micro_inspection_interfaces.msg import ObjectDetectionResult
 from cv_bridge import CvBridge
 from rclpy.duration import Duration
 

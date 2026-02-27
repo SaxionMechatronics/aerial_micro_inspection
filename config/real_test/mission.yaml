@@ -29,7 +29,7 @@ surface_segmentation:
   confidence_threshold: 0.27                                          
   iou_threshold: 0.3
   target_class_id: -1   # Set to a non-negative class id to filter only that segment class
-  path: "/home/sarax/det_ws/src/ai_scanner/weights/yolo11n_tree_seg_tuned.pt"  
+  path: "/home/sarax/det_ws/src/aerial_micro_inspection/weights/yolo11n_tree_seg_tuned.pt"  
 
 color_segmentation:
   min_size: 10.0
@@ -58,7 +58,7 @@ color_segmentation:
   v_max: 255
 
 micro_detection:
-  path: "/home/sarax/det_ws/src/ai_scanner/weights/yolov10n_eggs.pt"
+  path: "/home/sarax/det_ws/src/aerial_micro_inspection/weights/yolov10n_eggs.pt"
   confidence_threshold: 0.05
   iou_threshold: 0.1
 

@@ -8,7 +8,7 @@ import os
 
 def generate_launch_description():
 
-    ai_scanner_share = get_package_share_directory('ai_scanner')
+    aerial_micro_inspection_share = get_package_share_directory('aerial_micro_inspection')
 
     # Mission configurations
     mission_configs_arg = DeclareLaunchArgument('mission_config_file')
@@ -17,7 +17,7 @@ def generate_launch_description():
     )
 
     mission_config = PathJoinSubstitution([
-        ai_scanner_share,
+        aerial_micro_inspection_share,
         'config',
         LaunchConfiguration('mission_config_file')
     ])
@@ -25,7 +25,7 @@ def generate_launch_description():
     # Launch scanner nodes (gimbal node, usb camera, gimbal tracker, detection)
     scanner_system_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(ai_scanner_share, 'launch', 'scanner.launch.py')
+            os.path.join(aerial_micro_inspection_share, 'launch', 'scanner.launch.py')
         ),
         launch_arguments={
             'mission_config_file': mission_config,
@@ -40,7 +40,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'camera_model': 'zed2',
-            'ros_params_override_path': os.path.join(get_package_share_directory('ai_scanner'), 
+            'ros_params_override_path': os.path.join(get_package_share_directory('aerial_micro_inspection'), 
                                                      'config', 'zed2_rgb_depth_config.yaml'),
             'publish_tf': 'false',
             'publish_map_tf': 'false',
@@ -49,7 +49,7 @@ def generate_launch_description():
 
     # Launch Sony camera 
     camera_node = Node(
-        package='ai_scanner',
+        package='aerial_micro_inspection',
         executable='camera_node',
         name='camera_node',
         parameters=[{

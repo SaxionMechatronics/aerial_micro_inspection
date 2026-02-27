@@ -133,7 +133,7 @@ ENV ROS_DOMAIN_ID=0
 ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ENV PATH=/root/.local/bin:${PATH}
 
-COPY ai_scanner/docker/entrypoint.sh /entrypoint.sh
+COPY aerial_micro_inspection/docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

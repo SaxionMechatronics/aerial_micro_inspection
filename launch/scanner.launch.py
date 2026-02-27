@@ -13,7 +13,7 @@ from ament_index_python.packages import get_package_share_directory
 
 def _build_nodes(context):
 
-    pkg_share = get_package_share_directory('ai_scanner')
+    pkg_share = get_package_share_directory('aerial_micro_inspection')
     configs_dir = PathJoinSubstitution([
         pkg_share,
         'config'
@@ -37,7 +37,7 @@ def _build_nodes(context):
     )
 
     gimbal_node = Node(
-        package='ai_scanner',
+        package='aerial_micro_inspection',
         executable='gimbal_node',
         name='gimbal_node',
         output='screen',
@@ -47,7 +47,7 @@ def _build_nodes(context):
     )
 
     micro_detector_node = Node(
-        package='ai_scanner',
+        package='aerial_micro_inspection',
         executable='micro_detector',
         name='micro_detector',
         parameters=[{
@@ -57,7 +57,7 @@ def _build_nodes(context):
     )
 
     tracker_node = Node(
-        package='ai_scanner',
+        package='aerial_micro_inspection',
         executable='gimbal_tracker',
         name='gimbal_tracker',
         output='screen',
@@ -70,7 +70,7 @@ def _build_nodes(context):
     #TODO: Make sure the given value is either 'ai' or 'color'.
     is_ai = PythonExpression(["'", LaunchConfiguration('det_mode'), "' == 'ai'"])
     ai_detector_node = Node(
-        package='ai_scanner',
+        package='aerial_micro_inspection',
         executable='surface_segmentor',
         name='surface_segmentor',
         output='screen',
@@ -80,7 +80,7 @@ def _build_nodes(context):
         condition=IfCondition(is_ai)
     )
     color_detector_node = Node(
-        package='ai_scanner',
+        package='aerial_micro_inspection',
         executable='color_detector',
         name='color_detector',
         output='screen',

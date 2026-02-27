@@ -11,7 +11,7 @@ if [[ -f /ws/install/setup.bash ]]; then
   source /ws/install/setup.bash
 fi
 
-worlds_dir=/ws/src/ai_scanner/simulation/gazebo/worlds
+worlds_dir=/ws/src/aerial_micro_inspection/simulation/gazebo/worlds
 if [[ -d "$worlds_dir" ]]; then
   export IGN_GAZEBO_RESOURCE_PATH="$worlds_dir${IGN_GAZEBO_RESOURCE_PATH:+:$IGN_GAZEBO_RESOURCE_PATH}"
   export GZ_SIM_RESOURCE_PATH="$worlds_dir${GZ_SIM_RESOURCE_PATH:+:$GZ_SIM_RESOURCE_PATH}"

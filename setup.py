@@ -3,7 +3,7 @@ import os
 from glob import glob
 
 
-package_name = 'ai_scanner'
+package_name = 'aerial_micro_inspection'
 
 
 def simulation_data_files():
@@ -46,7 +46,7 @@ setup(
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
     ] + config_data_files() + simulation_data_files(),
-    install_requires=['setuptools', 'ai_scanner_interfaces'], 
+    install_requires=['setuptools', 'aerial_micro_inspection_interfaces'], 
     zip_safe=True,
     maintainer='Hojat Mirtajadini',
     maintainer_email='sehomi755@gmail.com',
@@ -55,15 +55,15 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'calibrate = ai_scanner.calibrate:main',
-            'camera_node = ai_scanner.camera_node:main',
-            'gimbal_node = ai_scanner.gimbal_node:main',
-            'gimbal_tracker = ai_scanner.gimbal_tracker:main',
-            'color_detector = ai_scanner.color_detector:main',
-            'surface_segmentor = ai_scanner.surface_segmentor:main',
-            'micro_detector = ai_scanner.micro_detector:main',
-            'px4_xrce_mission = ai_scanner.px4_xrce_mission:main',
-            'gazebo_ros_bridge = ai_scanner.gazebo_ros_bridge:main'
+            'calibrate = aerial_micro_inspection.calibrate:main',
+            'camera_node = aerial_micro_inspection.camera_node:main',
+            'gimbal_node = aerial_micro_inspection.gimbal_node:main',
+            'gimbal_tracker = aerial_micro_inspection.gimbal_tracker:main',
+            'color_detector = aerial_micro_inspection.color_detector:main',
+            'surface_segmentor = aerial_micro_inspection.surface_segmentor:main',
+            'micro_detector = aerial_micro_inspection.micro_detector:main',
+            'px4_xrce_mission = aerial_micro_inspection.px4_xrce_mission:main',
+            'gazebo_ros_bridge = aerial_micro_inspection.gazebo_ros_bridge:main'
         ],
     },
 )

@@ -6,7 +6,7 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory('ai_scanner')
+    pkg_share = get_package_share_directory('aerial_micro_inspection')
 
     # resolve your config files
     ai_yaml    = os.path.join(pkg_share, 'config', 'real_test', 'sony_55mm.yaml')
@@ -14,7 +14,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         Node(
-            package='ai_scanner',
+            package='aerial_micro_inspection',
             executable='calibrate',
             name='calibrate',
             output='screen',
