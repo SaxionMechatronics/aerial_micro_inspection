@@ -55,6 +55,12 @@ Launch full PX4 simulation:
 ros2 launch aerial_micro_inspection tree_car_px4.launch.py
 ```
 
+> [!NOTE]
+> 1. You should open QGroundControl in a separate terminal to enable the offboard mission control.
+> 2. In case you encounter errors such as `libOpticalFlowSystem.so`, `libGstCameraSystem.so`, or `MotorFailurePlugin` are missing, you can ignore them.
+> 3. In order for the default pipeline to work, you need to place some YOLO checkpoints related to the default mission (EPR) in the `aerial_mircro_inspection/weights` directory. You can find them in the following link:
+>  https://drive.google.com/file/d/1DVNta4nifv4AS4VwWwGPogL-U68__rrm/view?usp=sharing
+
 To launch the dual-camera inspection pipeline, in a separate terminal, run:
 
 ```bash
@@ -86,7 +92,7 @@ Our real-flight tests used a dual-camera payload and onboard compute stack compo
 
 This pipeline is designed to be adapted primarily by swapping model checkpoints and a small set of model-related config parameters, without changing node logic. The two models are needed are: (1) **Surface segmentation model** (2) **Micro detection model**. For surface segmentation, provide a YOLO segmentation checkpoint (`.pt`) in `surface_segmentation.path` (with `confidence_threshold` and `iou_threshold`); for micro target detection, provide a YOLO detection checkpoint (`.pt`) in `micro_detection.path` (with its own confidence/IoU thresholds). The expected model family is Ultralytics YOLO models compatible with the `ultralytics` runtime API, and the code is structured for that interface; however, in this project we have only validated behavior with YOLOv11 (surface segmentation) and YOLOv10/YOLOv11-style detection checkpoints.
 
-The default model we used for testing, was for tree trunk inspection to detect catterpillar nests. For instance, if we want to modify the pipeline for the use case of car's body inspection, we will use the pretrained ![YOLO11s-seg model](https://docs.ultralytics.com/models/yolo11/#segmentation-coco), download it and place it in the weights folder. Then, we modify the config file, specifically the following section:
+The default model we used for testing, was for tree trunk inspection to detect catterpillar nests. For instance, if we want to modify the pipeline for the use case of car's body inspection, we will use the pretrained [YOLO11s-seg model](https://docs.ultralytics.com/models/yolo11/#segmentation-coco), download it and place it in the weights folder. Then, we modify the config file, specifically the following section:
 
 ```yaml
 surface_segmentation:
