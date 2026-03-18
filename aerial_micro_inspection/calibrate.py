@@ -46,6 +46,8 @@ class DualCameraApril(Node):
         self.declare_parameter('gimbal_topic', '/gimbal_orientation')
         self.declare_parameter('visualize', False)
         self.declare_parameter('sync_slop', 0.2) 
+        self.declare_parameter('marker_line_thickness', 4)
+        self.declare_parameter('axis_line_thickness', 4)
         
 
         ai_img_t   = self.get_parameter('ai_image_topic').value
@@ -61,6 +63,8 @@ class DualCameraApril(Node):
 
         self.visualize = self.get_parameter('visualize').value
         self.slop      = self.get_parameter('sync_slop').value
+        self.marker_line_thickness = int(self.get_parameter('marker_line_thickness').value)
+        self.axis_line_thickness = int(self.get_parameter('axis_line_thickness').value)
 
         self.ai_yaml    = load_yaml(ai_yaml_p)
         self.nav_yaml   = load_yaml(nav_yaml_p)
@@ -219,10 +223,16 @@ class DualCameraApril(Node):
         self.last_nav_info = info
 
     def cb_synced(self, ai_img_msg, nav_img_msg, gimbal_stamped):
-        # convert ROS→CV
+        
         img_ai  = self.bridge.imgmsg_to_cv2(ai_img_msg,  'bgr8')
         img_nav = self.bridge.imgmsg_to_cv2(nav_img_msg, 'bgr8')
         gim_q   = gimbal_stamped.quaternion
+
+        def refresh_display():
+            if self.visualize:
+                cv2.imshow('AI Camera',  img_ai)
+                cv2.imshow('Nav Camera', img_nav)
+                cv2.waitKey(1)
 
         # camera intrinsics
         K1 = np.array(self.ai_yaml['camera_matrix']['data']).reshape(3,3)
@@ -239,12 +249,28 @@ class DualCameraApril(Node):
         # AI camera
         r1, t1, ok1, obj_c = self.detect_and_draw_aruco(img_ai, K1, D1)
         if ok1:
-            cv2.drawFrameAxes(img_ai, K1, D1, r1, t1, self.aruco_cfg['marker_size'])
+            cv2.drawFrameAxes(
+                img_ai,
+                K1,
+                D1,
+                r1,
+                t1,
+                self.aruco_cfg['marker_size'],
+                self.axis_line_thickness,
+            )
 
         # Nav camera
         r2, t2, ok2, _ = self.detect_and_draw_aruco(img_nav, K2, D2)
         if ok2:
-            cv2.drawFrameAxes(img_nav, K2, D2, r2, t2, self.aruco_cfg['marker_size'])
+            cv2.drawFrameAxes(
+                img_nav,
+                K2,
+                D2,
+                r2,
+                t2,
+                self.aruco_cfg['marker_size'],
+                self.axis_line_thickness,
+            )
 
         # show both
         # cv2.imshow('AI Camera',  img_ai)
@@ -252,6 +278,7 @@ class DualCameraApril(Node):
         # cv2.waitKey(1)
 
         if not ok1 or not ok2:
+            refresh_display()
             return
 
         def to_T(rvec, tvec):
@@ -310,7 +337,7 @@ class DualCameraApril(Node):
             pts2.T, np.zeros(3), np.zeros(3), K2, D2
         ) 
         uv = uv.reshape(-1,2).astype(int)  
-        cv2.polylines(img_nav, [uv.reshape(-1,1,2)], True, (0,0,255), 2)
+        # cv2.polylines(img_nav, [uv.reshape(-1,1,2)], True, (0,0,255), 2)
 
         # project gimbal base's front axis on the nav image to approximately the correctness of calibration.
         gimbal_front = np.array([
@@ -324,9 +351,9 @@ class DualCameraApril(Node):
             pts3.T, np.zeros(3), np.zeros(3), K2, D2
         ) 
         uv = uv.reshape(-1,2).astype(int) 
-        cv2.polylines(img_nav, [uv.reshape(-1,1,2)], True, (0,255,0), 2)
-        for i, p in enumerate(uv):
-            cv2.circle(img_nav, p, (len(uv) - i)*5, (0,255,0), -1)
+        # cv2.polylines(img_nav, [uv.reshape(-1,1,2)], True, (0,255,0), 2)
+        # for i, p in enumerate(uv):
+        #     cv2.circle(img_nav, p, (len(uv) - i)*5, (0,255,0), -1)
 
         # project gimbal base's front axis on the ai image to check corrected of the ai cam to gimbal transformation.
         ang = 0*3.1415/180
@@ -342,14 +369,12 @@ class DualCameraApril(Node):
             pts4.T, np.zeros(3), np.zeros(3), K1, D1
         ) 
         uv = uv.reshape(-1,2).astype(int) 
-        cv2.polylines(img_ai, [uv.reshape(-1,1,2)], True, (0,255,0), 2)
-        for i, p in enumerate(uv):
-            cv2.circle(img_ai, p, (len(uv) - i)*5, (0,255,0), -1)
+        # cv2.polylines(img_ai, [uv.reshape(-1,1,2)], True, (0,255,0), 2)
+        # for i, p in enumerate(uv):
+        #     cv2.circle(img_ai, p, (len(uv) - i)*5, (0,255,0), -1)
 
         # refresh window
-        cv2.imshow('AI Camera',  img_ai)
-        cv2.imshow('Nav Camera', img_nav)
-        cv2.waitKey(1)
+        refresh_display()
 
 
     def detect_and_draw_aruco(self, img, K, D):
@@ -362,15 +387,24 @@ class DualCameraApril(Node):
                                                       parameters=self.aruco_params
                                                      )
         if ids is None or self.marker_id not in ids.flatten():
-            cv2.putText(img, "No detection", (10,30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,0,255), 2)
+            # cv2.putText(img, "No detection", (10,30),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,0,255), 2)
             return None, None, False, None
 
-        # draw all actual detections
-        cv2.aruco.drawDetectedMarkers(img, corners, ids)
+       
+        for marker_corners in corners:
+            pts = marker_corners.reshape(-1, 1, 2).astype(np.int32)
+            cv2.polylines(
+                img,
+                [pts],
+                isClosed=True,
+                color=(0, 255, 0),
+                thickness=self.marker_line_thickness,
+            )
 
         idx = list(ids.flatten()).index(self.marker_id)
-        img_c = corners[idx].reshape(4,2)  # (4,2) image corners
+        img_c = corners[idx].reshape(4,2)  
+        
         # define 3D object corners (marker-frame), same order:
         s = self.marker_size
         obj_c = np.array([
@@ -389,7 +423,7 @@ class DualCameraApril(Node):
             return None, None, False, None
 
         # draw axes
-        cv2.drawFrameAxes(img, K, D, rvec, tvec, s*0.5)
+        cv2.drawFrameAxes(img, K, D, rvec, tvec, s*0.5, self.axis_line_thickness)
         return rvec, tvec, True, obj_c
 
 def main(args=None):

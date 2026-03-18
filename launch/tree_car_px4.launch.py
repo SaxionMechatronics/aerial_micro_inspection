@@ -26,6 +26,7 @@ def generate_launch_description():
     xrce_udp_port_arg = DeclareLaunchArgument('xrce_udp_port', default_value='8888')
     run_mission_arg = DeclareLaunchArgument('run_mission', default_value='true')
     run_camera_bridge_arg = DeclareLaunchArgument('run_camera_bridge', default_value='true')
+    run_gt_pose_tf_arg = DeclareLaunchArgument('run_gt_pose_tf', default_value='true')
     target_waypoint_x_arg = DeclareLaunchArgument('target_waypoint_x', default_value='3.0')
     target_waypoint_y_arg = DeclareLaunchArgument('target_waypoint_y', default_value='-6.5')
     target_waypoint_z_arg = DeclareLaunchArgument('target_waypoint_z', default_value='-2.0')
@@ -40,6 +41,7 @@ def generate_launch_description():
     xrce_udp_port = LaunchConfiguration('xrce_udp_port')
     run_mission = LaunchConfiguration('run_mission')
     run_camera_bridge = LaunchConfiguration('run_camera_bridge')
+    run_gt_pose_tf = LaunchConfiguration('run_gt_pose_tf')
     target_waypoint_x = LaunchConfiguration('target_waypoint_x')
     target_waypoint_y = LaunchConfiguration('target_waypoint_y')
     target_waypoint_z = LaunchConfiguration('target_waypoint_z')
@@ -97,10 +99,21 @@ def generate_launch_description():
                     "ros_gz_bridge_config.yaml",
                 ),
             },
-            # Useful if you bridge tf_static later; safe to keep
+            # Useful if bridging tf_static
             {"qos_overrides./tf_static.publisher.durability": "transient_local"},
         ],
         output="screen",
+    )
+
+    gt_pose_tf = Node(
+        package='aerial_micro_inspection',
+        executable='gazebo_pose_topics_to_tf',
+        name='gazebo_pose_topics_to_tf',
+        output='screen',
+        parameters=[{
+            'publish_unmapped_frames': False,
+        }],
+        condition=IfCondition(run_gt_pose_tf),
     )
 
 
@@ -130,6 +143,7 @@ def generate_launch_description():
         xrce_udp_port_arg,
         run_mission_arg,
         run_camera_bridge_arg,
+        run_gt_pose_tf_arg,
         target_waypoint_x_arg,
         target_waypoint_y_arg,
         target_waypoint_z_arg,
@@ -138,5 +152,6 @@ def generate_launch_description():
         TimerAction(period=3.0, actions=[run_simulation_gazebo]),
         TimerAction(period=6.0, actions=[xrce_agent]),
         TimerAction(period=8.0, actions=[bridge]),
+        TimerAction(period=8.2, actions=[gt_pose_tf]),
         TimerAction(period=9.0, actions=[mission_node]),
     ])

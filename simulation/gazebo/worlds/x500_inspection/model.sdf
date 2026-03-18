@@ -5,8 +5,18 @@
       <uri>model://x500</uri>
     </include>
 
-    <include merge='true'>
+    <!-- 
+    The following name that we assign for the included gimbal-camera model is a trick to make two things work.
+
+      1. The gimbal model needs to be included with "merge=true". This is the only way that PX4 will find the gimbal command topics properly. In other words, the merge option makes sure that the gimbal command topics become in this format: "/model/x500_inspection_0/command/gimbal_pitch". If merge is not enabled the topics will be like: "/model/x500_inspection_0/model/<the name you put down here>/command/gimbal_pitch" and PX4 connection to the simulated model will be gone. To fix this, we needed to change PX4 code which we did not do.
+
+      2. We use PosePublisher plugin to publish the pose of the gimbal model and all its child links as ground-truth. The only configuration that we could make it work so that it published all the required poses, was to place the plugin inside the "gimbal_zoomed" model. An the only way that it worked was by not using the merge option down here when we include. 
+
+    So, the above two requirements contradicted eachother. As a dirty easy trick, we named the gimbal model the same as the main model "x500_inspection_0". This way, the included gimbal model is not nested inside the main model and the plugin can publish its pose and all its child links' poses. At the same time, the merge option in the main model's include makes sure that the gimbal command topics are in the right format for PX4 to find and subscribe to. 
+    -->
+    <include>
       <uri>model://gimbal_zoomed</uri>
+      <name>x500_inspection_0</name>
       <pose>0 0 0.26 0 0 3.14</pose>
     </include>
 
@@ -23,7 +33,19 @@
 
     <joint name="GimbalAttachJoint" type="fixed">
       <parent>base_link</parent>
-      <child>cgo3_mount_link</child>
+      <child>x500_inspection_0::cgo3_mount_link</child>
     </joint>
+
+    <plugin
+      filename="gz-sim-pose-publisher-system"
+      name="gz::sim::systems::PosePublisher">
+      <publish_link_pose>false</publish_link_pose>
+      <publish_sensor_pose>false</publish_sensor_pose>
+      <publish_model_pose>true</publish_model_pose>
+      <publish_nested_model_pose>false</publish_nested_model_pose>
+      <use_pose_vector_msg>false</use_pose_vector_msg>
+      <static_publisher>false</static_publisher>
+      <update_frequency>30</update_frequency>
+    </plugin>
   </model>
 </sdf>

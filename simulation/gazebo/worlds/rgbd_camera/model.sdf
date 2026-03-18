@@ -4,6 +4,17 @@
     <pose>0 0 0 0 0 0</pose>
     <self_collide>false</self_collide>
     <static>false</static>
+    <plugin
+      filename="gz-sim-pose-publisher-system"
+      name="gz::sim::systems::PosePublisher">
+      <publish_link_pose>true</publish_link_pose>
+      <publish_sensor_pose>true</publish_sensor_pose>
+      <publish_model_pose>true</publish_model_pose>
+      <publish_nested_model_pose>true</publish_nested_model_pose>
+      <use_pose_vector_msg>false</use_pose_vector_msg>
+      <static_publisher>false</static_publisher>
+      <update_frequency>30</update_frequency>
+    </plugin>
     <link name="camera_link">
       <inertial>
         <pose>0.00358 -0.03 .014 0 0 0</pose>
@@ -70,6 +81,25 @@
         <update_rate>30</update_rate>
         <visualize>true</visualize>
         <topic>/nav_cam/depth_image/image_raw</topic>
+      </sensor>
+      <sensor name="SemanticGT" type="segmentation">
+        <pose>0.01233 -0.03 .01878 0 0 0</pose>
+        <camera>
+          <segmentation_type>semantic</segmentation_type>
+          <horizontal_fov>2.09439510239</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>100</far>
+          </clip>
+        </camera>
+        <always_on>1</always_on>
+        <update_rate>30</update_rate>
+        <visualize>true</visualize>
+        <topic>/nav_cam/segmentation</topic>
       </sensor>
       <gravity>true</gravity>
       <velocity_decay/>

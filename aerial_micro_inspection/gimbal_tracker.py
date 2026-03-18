@@ -17,7 +17,7 @@ from tf_transformations import quaternion_from_euler
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import QuaternionStamped
 from nav_msgs.msg import Odometry
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float32MultiArray, Empty
 from aerial_micro_inspection_interfaces.msg import ObjectDetectionResult
 from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
@@ -28,12 +28,8 @@ from aerial_micro_inspection.utils import load_yaml, quaternion_to_rotmat
 ## TODO: 
 ##       Publish the tf for all frames
 ##       Fix launch file
-##       Push code to bitbucket
 ##       Fix the wrong scale of position in the calibration
 ##       Increase the accuracy of calibration with iterative methods
-##       Think of a scanning method
-##       Literature review
-##       Confluence documentation
 
 
 class GimbalTracker(Node):
@@ -121,6 +117,8 @@ class GimbalTracker(Node):
 
         self.gimbal_publisher = self.create_publisher(QuaternionStamped, des_ori_t, 10)
         self.image_publisher = self.create_publisher(Image, pln_img_t, 10)
+        self.sweep_reset_pub = self.create_publisher(Empty, '/gimbal_tracker/sweep_reset', 10)
+        self.sweep_windows_pub = self.create_publisher(Float32MultiArray, '/gimbal_tracker/sweep_windows_px', 10)
 
         self.executing_trajectory = False
         self.mask_latest = None
@@ -138,11 +136,12 @@ class GimbalTracker(Node):
         self.tracker_displacement = (0, 0)
         self.cv_tracker = None
         self.latest_det_msg = None
+        self.sweep_reset_deadline_wall: Optional[float] = None
 
         if self.enable_nav_tracker_mode:
             self.get_logger().info('Tracker-driven nav mode enabled.')
         else:
-            self.get_logger().info('Tracker-driven nav mode disabled: replanning on each detection without motion correction.')
+            self.get_logger().info('Tracker-driven nav mode disabled: fixed sweep plan with no motion-feedback updates.')
 
         self.get_logger().info(f'GimbalTracker ready with {calib_p} config file.')
 
@@ -150,6 +149,26 @@ class GimbalTracker(Node):
     def gimbal_adjusments_callback(self, msg):
         self.pitch_offset += msg.data[0]
         self.yaw_offset += msg.data[1]
+
+    def _cancel_sweep_reset_timer(self):
+        self.sweep_reset_deadline_wall = None
+
+    def _schedule_sweep_reset(self):
+        self._cancel_sweep_reset_timer()
+
+        delay = max(0.0, float(self.wp_hold_time))
+        if delay <= 0.0:
+            self.sweep_reset_pub.publish(Empty())
+            return
+        self.sweep_reset_deadline_wall = time.time() + delay
+
+    def _publish_sweep_windows_px(self, wins):
+        msg = Float32MultiArray()
+        data = []
+        for x0, y0, x1, y1 in wins:
+            data.extend([float(x0), float(y0), float(x1), float(y1)])
+        msg.data = data
+        self.sweep_windows_pub.publish(msg)
         
     def cb_detection_only(self, det_msg):
         if self.planning_mode != "sweeping":
@@ -157,10 +176,9 @@ class GimbalTracker(Node):
                 self.latest_det_msg = det_msg
             return
 
-        if self.enable_nav_tracker_mode:
-            with self.state_lock:
-                if not self.allow_new_plan:
-                    return
+        with self.state_lock:
+            if not self.allow_new_plan:
+                return
 
         if not (det_msg.img_w == self.nav_w and det_msg.img_h == self.nav_h):
             raise ValueError('The detection image size should match the calibrated NAV image size.')
@@ -190,9 +208,8 @@ class GimbalTracker(Node):
             self.base_wins = wins
             self.wins = list(wins)
             self.mask_latest = mask.copy()
-            if self.enable_nav_tracker_mode:
-                self.current_wp_idx = 0
-                self.active_wp_start_time = None
+            self.current_wp_idx = 0
+            self.active_wp_start_time = None
             self.det_stamp = det_msg.header.stamp
             self.pending_tracker_init_bbox = init_bbox
             self.latest_tracked_bbox = None
@@ -200,7 +217,13 @@ class GimbalTracker(Node):
             self.tracker_displacement = (0, 0)
             self.cv_tracker = None
             self.executing_trajectory = True
-            self.allow_new_plan = not self.enable_nav_tracker_mode
+            self.allow_new_plan = False
+            self.active_wp_start_time = None
+
+        self._publish_sweep_windows_px(wins)
+
+        # Emit sweep start reset after a fixed delay equal to waypoint_hold_time.
+        self._schedule_sweep_reset()
 
     def cb_nav_depth(self, nav_msg, depth_msg):
         nav_img = self.bridge.imgmsg_to_cv2(nav_msg, 'bgr8')
@@ -290,6 +313,13 @@ class GimbalTracker(Node):
                 return
 
             now = time.time()
+
+            if self.sweep_reset_deadline_wall is not None and now >= self.sweep_reset_deadline_wall:
+                self.sweep_reset_pub.publish(Empty())
+                self.get_logger().info(
+                    f'Sweep reset emitted after startup delay={self.wp_hold_time:.2f}s (waypoint_hold_time)')
+                self.sweep_reset_deadline_wall = None
+
             if self.active_wp_start_time is None:
                 self.active_wp_start_time = now
 
@@ -300,6 +330,9 @@ class GimbalTracker(Node):
 
             if p_gb is not None:
                 self.publish_orientation(p_gb, nav_msg.header.stamp)
+
+            if self.active_wp_start_time is None:
+                self.active_wp_start_time = now
 
             if (now - self.active_wp_start_time) >= self.wp_hold_time:
                 self.current_wp_idx += 1
@@ -378,6 +411,7 @@ class GimbalTracker(Node):
         self.tracker_ref_center = None
         self.tracker_displacement = (0, 0)
         self.cv_tracker = None
+        self._cancel_sweep_reset_timer()
 
     def largest_center_strip_bbox(self, mask: np.ndarray, win_w: int):
 
@@ -476,11 +510,12 @@ class GimbalTracker(Node):
         counter = 1
 
         
-        # Sweep bottom to top, left to right
-        # self.get_logger().info(f'\n\n')
-        for y0 in y0_list:
+        # Sweep bottom-to-top with boustrophedon ordering:
+        # even rows left->right, odd rows right->left.
+        for row_idx, y0 in enumerate(y0_list):
             y1 = y0 + win_h
-            for x0 in x0_list:
+            row_x0_list = x0_list if (row_idx % 2 == 0) else list(reversed(x0_list))
+            for x0 in row_x0_list:
                 x1 = x0 + win_w
                 # count white pixels in this window
                 count_white = np.count_nonzero(mask[y0:y1, x0:x1])

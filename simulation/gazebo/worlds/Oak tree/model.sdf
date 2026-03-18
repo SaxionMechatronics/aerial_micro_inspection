@@ -10,6 +10,9 @@
         </geometry>
       </collision>
       <visual name="branch">
+        <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+          <label>2</label>
+        </plugin>
         <geometry>
           <mesh>
             <uri>model://Oak tree/meshes/oak_tree.dae</uri>
@@ -35,6 +38,9 @@
         </material>
       </visual>
       <visual name="bark">
+        <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+          <label>3</label>
+        </plugin>
         <geometry>
           <mesh>
             <uri>model://Oak tree/meshes/oak_tree.dae</uri>

@@ -13,7 +13,8 @@ The most simple installation is through docker using the docker file at `aerial_
 Build from the workspace `src` directory:
 
 ```bash
-cd ~ && mkdir scanner_ws && cd ~/scanner_ws/src
+cd ~ && mkdir -p scanner_ws/src && cd ~/scanner_ws/src
+git clone https://github.com/SaxionMechatronics/aerial_micro_inspection.git
 docker build -f aerial_micro_inspection/Dockerfile -t aerial_micro_inspection:humble .
 ```
 
@@ -58,14 +59,16 @@ ros2 launch aerial_micro_inspection tree_car_px4.launch.py
 > [!NOTE]
 > 1. You should open QGroundControl in a separate terminal to enable the offboard mission control.
 > 2. In case you encounter errors such as `libOpticalFlowSystem.so`, `libGstCameraSystem.so`, or `MotorFailurePlugin` are missing, you can ignore them.
-> 3. In order for the default pipeline to work, you need to place some YOLO checkpoints related to the default mission (EPR) in the `aerial_mircro_inspection/weights` directory. You can find them in the following link:
->  https://drive.google.com/file/d/1DVNta4nifv4AS4VwWwGPogL-U68__rrm/view?usp=sharing
 
 To launch the dual-camera inspection pipeline, in a separate terminal, run:
 
 ```bash
 ros2 launch aerial_micro_inspection scanner.launch.py mission_config_file:=/ws/src/aerial_micro_inspection/config/simulation/mission.yaml det_mode:='ai'
 ```
+
+> [!NOTE]
+> In order for the default pipeline to work, you need to place some YOLO checkpoints related to the default mission (EPR) in the `aerial_mircro_inspection/weights` directory. You can find them in the following link:
+>  https://drive.google.com/file/d/1DVNta4nifv4AS4VwWwGPogL-U68__rrm/view?usp=sharing
 
 To visualize:
 
@@ -76,6 +79,15 @@ rviz2 -d /ws/src/aerial_micro_inspection/config/rviz_config.rviz
 Expected outcome in use case of tree trunk inspection to detect caterpillar eggs:
 
 ![tree inspection](demo/tree_inspection1.gif)
+
+To run the evaluation code which visualizes ground-truth of gimbal coverage:
+
+```bash
+cd /ws/src/aerial_micro_inspection/eval
+python3 surface_intersection_eval.py
+```
+
+![tree inspection](demo/eval.gif)
 
 ## 5. Real Test on Jetson Orin Nano
 

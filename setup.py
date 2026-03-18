@@ -35,6 +35,36 @@ def config_data_files():
         entries.append((target, [os.path.join(root, f) for f in files]))
     return entries
 
+
+def eval_data_files():
+    entries = []
+    eval_root = 'eval'
+    for root, _, files in os.walk(eval_root):
+        if not files:
+            continue
+        rel = os.path.relpath(root, eval_root)
+        if rel == '.':
+            target = os.path.join('share', package_name, eval_root)
+        else:
+            target = os.path.join('share', package_name, eval_root, rel)
+        entries.append((target, [os.path.join(root, f) for f in files]))
+    return entries
+
+
+def urdf_data_files():
+    entries = []
+    urdf_root = 'urdf'
+    for root, _, files in os.walk(urdf_root):
+        if not files:
+            continue
+        rel = os.path.relpath(root, urdf_root)
+        if rel == '.':
+            target = os.path.join('share', package_name, urdf_root)
+        else:
+            target = os.path.join('share', package_name, urdf_root, rel)
+        entries.append((target, [os.path.join(root, f) for f in files]))
+    return entries
+
 setup(
     name=package_name,
     version='0.0.0',
@@ -45,7 +75,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
-    ] + config_data_files() + simulation_data_files(),
+    ] + config_data_files() + simulation_data_files() + eval_data_files() + urdf_data_files(),
     install_requires=['setuptools', 'aerial_micro_inspection_interfaces'], 
     zip_safe=True,
     maintainer='Hojat Mirtajadini',
@@ -63,7 +93,8 @@ setup(
             'surface_segmentor = aerial_micro_inspection.surface_segmentor:main',
             'micro_detector = aerial_micro_inspection.micro_detector:main',
             'px4_xrce_mission = aerial_micro_inspection.px4_xrce_mission:main',
-            'gazebo_ros_bridge = aerial_micro_inspection.gazebo_ros_bridge:main'
+            'gazebo_ros_bridge = aerial_micro_inspection.gazebo_ros_bridge:main',
+            'gazebo_pose_topics_to_tf = aerial_micro_inspection.gazebo_pose_topics_to_tf:main',
         ],
     },
 )

@@ -20,10 +20,10 @@ output:
 pipeline:
   det_mode:                   "ai"   # Options: ai, color
   planning_mode:              "sweeping" # Options: pitch_lock, pitch_yaw_lock, sweeping
-  sweeping_overlap:           0.2
+  sweeping_overlap:           0.0
   min_cell_occupancy:         0.5
   enable_nav_tracker_mode:    true
-  waypoint_hold_time:         2.0
+  waypoint_hold_time:         3.0
 
 surface_segmentation:
   confidence_threshold: 0.27                                          

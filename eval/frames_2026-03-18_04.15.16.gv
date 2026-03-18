@@ -1,0 +1,23 @@
+digraph G {
+"gimbal_camera_link_gt" -> "inspection_cam_sensor_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.175\nBuffer length: 2.52\nMost recent transform: 95.748\nOldest transform: 93.228\n"];
+"gimbal_root_gt" -> "gimbal_camera_link_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"nav_camera_link_gt" -> "nav_seg_sensor_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.175\nBuffer length: 2.52\nMost recent transform: 95.748\nOldest transform: 93.228\n"];
+"nav_rig_gt" -> "nav_camera_link_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"tree_car_world" -> "uav_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"gimbal_camera_link_gt" -> "inspection_cam_imu_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"nav_camera_link_gt" -> "nav_depth_sensor_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"uav_gt" -> "gimbal_root_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"nav_camera_link_gt" -> "nav_rgb_sensor_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"gimbal_root_gt" -> "gimbal_roll_link_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"uav_gt" -> "nav_rig_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"gimbal_root_gt" -> "gimbal_yaw_link_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"gimbal_root_gt" -> "gimbal_mount_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"inspection_cam_sensor_gt" -> "inspection_cam_optical_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"nav_rgb_sensor_gt" -> "nav_rgb_optical_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"nav_depth_sensor_gt" -> "nav_depth_optical_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+"nav_seg_sensor_gt" -> "nav_seg_optical_gt"[label=" Broadcaster: default_authority\nAverage rate: 28.18\nBuffer length: 2.484\nMost recent transform: 95.712\nOldest transform: 93.228\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 1773807316.4416842"[ shape=plaintext ] ;
+}->"tree_car_world";
+}

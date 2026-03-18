@@ -19,12 +19,12 @@ def generate_launch_description():
             name='calibrate',
             output='screen',
             parameters=[
-                # AI camera (only YAML, no CameraInfo topic)
+                # AI camera 
                 { 'ai_image_topic':         '/camera/image_raw' },
                 { 'ai_camera_info_yaml':    ai_yaml },
                 { 'ai_camera_info_topic':   '' },
 
-                # Nav camera (only CameraInfo topic, no YAML)
+                # Nav camera 
                 { 'nav_image_topic':        '/zed/zed_node/left_raw/image_raw_color' },
                 { 'nav_camera_info_yaml':   '' },
                 { 'nav_camera_info_topic':  '/zed/zed_node/left_raw/camera_info' },

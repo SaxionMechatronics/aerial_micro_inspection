@@ -62,6 +62,9 @@
         </inertial>
         <enable_wind>false</enable_wind>
       </link>
+      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+        <label>1</label>
+      </plugin>
       <pose>0 0 0 0 -0 0</pose>
       <self_collide>false</self_collide>
     </model>
@@ -95,13 +98,16 @@
     <include>
       <uri>model://Oak tree</uri>
       <name>oak_tree</name>
-      <pose>0 0 0 0 0 0</pose>
+      <pose>0 0 0 0 0 1.4</pose>
     </include>
 
     <include>
       <uri>model://Pine Tree</uri>
       <name>pine_tree</name>
       <pose>6 6 0 0 0 0</pose>
+      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+        <label>4</label>
+      </plugin>
     </include>
 
     <include>
@@ -109,6 +115,32 @@
       <name>prius_hybrid</name>
       <pose>-6 6 0 0 0 0</pose>
     </include>
+
+    <model name="eval_cam_tree">
+      <static>true</static>
+      <link name="camera_link">
+        <!-- Input orientation was quaternion (x,y,z,w)=(-0.0851,-0.0160,0.97909,-0.1840). -->
+        <pose>4.1 3.6 2.6 -0.0 0.17 -2.1</pose>
+        <sensor name="eval_cam_tree_sensor" type="camera">
+          <always_on>true</always_on>
+          <update_rate>30</update_rate>
+          <visualize>true</visualize>
+          <camera>
+            <horizontal_fov>1.0471975512</horizontal_fov>
+            <image>
+              <width>1280</width>
+              <height>720</height>
+              <format>R8G8B8</format>
+            </image>
+            <clip>
+              <near>0.1</near>
+              <far>200.0</far>
+            </clip>
+          </camera>
+          <topic>/eval_cam_tree/rgb_image/image_raw</topic>
+        </sensor>
+      </link>
+    </model>
 
     <gui fullscreen="0">
       <camera name="user_camera">
