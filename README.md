@@ -4,7 +4,7 @@ Inspecting surfaces for tiny targets is challenging, especially with an aerial r
 
 [![aerial_micro_inspection demo video](demo/thumbnail.jpg)](https://www.youtube.com/watch?v=biAapcSxhtY)
 
-# Usage 
+# Setting up simulation
 
 The most simple installation is through docker using the docker file at `aerial_micro_inspection/Dockerfile`.
 
@@ -16,7 +16,6 @@ Build from the workspace `src` directory:
 cd ~ && mkdir scanner_ws && cd ~/scanner_ws/src
 docker build -f aerial_micro_inspection/Dockerfile -t aerial_micro_inspection:humble .
 ```
-
 ## 2. Run container with Gazebo GUI (Linux/X11)
 
 Make sure NVIDIA Container Toolkit is installed on host, then run with GPU access:
@@ -37,8 +36,6 @@ docker run --rm -it \
 	aerial_micro_inspection:humble
 ```
 
-
-
 ## 3. Build workspace manually inside container
 
 ```bash
@@ -47,7 +44,7 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-## 4. Simulation
+## 4. Run simulation
 
 Launch full PX4 simulation:
 
@@ -77,7 +74,95 @@ Expected outcome in use case of tree trunk inspection to detect caterpillar eggs
 
 ![tree inspection](demo/tree_inspection1.gif)
 
-## 5. Real Test on Jetson Orin Nano
+# Setting up on Jetson Orin Nano
+
+## 1. Build docker image 
+
+To keep the simulation setup unchanged while using a lighter image for hardware tests,
+build from `Dockerfile.real`:
+
+```bash
+cd ~ && mkdir -p scanner_ws/src && cd ~/scanner_ws/src
+git clone https://github.com/SaxionMechatronics/aerial_micro_inspection.git
+docker build -f aerial_micro_inspection/Dockerfile.real \
+	--build-arg L4T_BASE_IMAGE=nvcr.io/nvidia/l4t-ml:r36.3.0-py3 \
+	--build-arg PX4_MSGS_GIT_REF=release/1.15 \
+	-t aerial_micro_inspection:humble-real .
+```
+
+> [!IMPORTANT]
+> The `PX4_MSGS_GIT_REF` used in this image should match the PX4 version installed on the drone.
+> For instance, if the PX4 version is `1.15.2`, use `PX4_MSGS_GIT_REF=release/1.15`.
+
+> [!IMPORTANT]
+> `Dockerfile.real` now uses an L4T-native base image: `nvcr.io/nvidia/l4t-ml:r36.3.0-py3` by default.
+> This is the clean Jetson path because CUDA, cuDNN, TensorRT, and the Jetson PyTorch stack come from
+> the base image instead of being bind-mounted from the host. If your Jetson runs a different JetPack/L4T
+> release, override `L4T_BASE_IMAGE` to the matching `l4t-ml` tag.
+
+> [!WARNING]
+> The ZED SDK URL in `Dockerfile.real` is pinned to **L4T 36.3 (JetPack 6.x)**.
+> If your Jetson is running a different L4T/JetPack version, you must override the URL:
+> ```bash
+> --build-arg ZED_SDK_RUN_URL=https://download.stereolabs.com/zedsdk/<version>/<l4t_version>/jetsons
+> ```
+> Check [Stereolabs Downloads](https://www.stereolabs.com/developers/release/) for your exact L4T version.
+
+> [!WARNING]
+> The real Docker image also builds `zed-ros2-wrapper` in `/zed_ws` using branch `humble-v5.0.0`
+> so `zed_wrapper` is available for downstream packages. To override this branch:
+> ```bash
+> --build-arg ZED_WRAPPER_GIT_BRANCH=humble-v5.0.0
+> ```
+
+Run the real-test image (host network + devices, with CUDA + X11 GUI forwarding):
+
+If you are connected over SSH, prefer `ssh -Y` (trusted X11 forwarding) instead of `ssh -X`.
+
+If `mission.yaml` uses a stable camera path such as `/dev/v4l/by-id/...`, the command below mounts the
+host's V4L symlink tree into the container so those device IDs resolve there too.
+
+```bash
+XAUTH=/tmp/.docker.xauth
+touch "$XAUTH"
+xauth nlist "$DISPLAY" | sed -e 's/^..../ffff/' | xauth -f "$XAUTH" nmerge -
+
+xhost +local:docker
+
+docker run --rm -it \
+	--runtime=nvidia \
+	--net=host \
+	--privileged \
+	-e NVIDIA_VISIBLE_DEVICES=all \
+	-e NVIDIA_DRIVER_CAPABILITIES=all \
+	-e DISPLAY=$DISPLAY \
+	-e XAUTHORITY=/tmp/.docker.xauth \
+	-e QT_X11_NO_MITSHM=1 \
+	-v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+	-v "$XAUTH":/tmp/.docker.xauth:ro \
+	-v /dev/v4l:/dev/v4l:ro \
+	-v /run/udev:/run/udev:ro \
+	-v ~/scanner_ws/src:/ws/src:rw \
+	aerial_micro_inspection:humble-real
+```
+
+Inside the container:
+
+```bash
+cd /ws
+colcon build --symlink-install
+source install/setup.bash
+```
+
+Then launch the real-test stack:
+
+```bash
+ros2 launch aerial_micro_inspection scanner_zed.launch.py mission_config_file:=/home/sarax/Documents/scanner_ws/src/aerial_micro_inspection/config/real_test/mission.yaml det_mode:='ai'
+```
+
+> [!NOTE]
+> make sure, similar to simation stage, you have placed the checkpoints to prevent runtime errors. You can also use the same rviz command for visualization
+
 
 ### 5.1 Setup
 

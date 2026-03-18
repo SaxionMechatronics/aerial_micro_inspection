@@ -1,0 +1,132 @@
+ARG L4T_BASE_IMAGE=nvcr.io/nvidia/l4t-ml:r36.3.0-py3
+FROM ${L4T_BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV ROS_DISTRO=humble
+ENV ROS_DOMAIN_ID=0
+ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+ENV PATH=/root/.local/bin:${PATH}
+ENV CUDA_HOME=/usr/local/cuda
+ENV CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda
+ENV LD_LIBRARY_PATH=/usr/local/cuda/targets/aarch64-linux/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+
+SHELL ["/bin/bash", "-c"]
+
+RUN test "$(dpkg --print-architecture)" = "arm64" || \
+    (echo "This Dockerfile.real is Jetson-only (arm64)." && exit 1)
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    wget \
+    zstd \
+    gnupg2 \
+    lsb-release \
+    software-properties-common \
+    build-essential \
+    cmake \
+    ninja-build \
+    ccache \
+    git \
+    libasio-dev \
+    libtinyxml2-dev \
+    python3-colcon-common-extensions \
+    python3-rosdep \
+    python3-vcstool \
+    python3-pip \
+    python3-opencv \
+    python3-numpy \
+    python3-scipy \
+    python3-yaml \
+    python3-jinja2 \
+    python3-empy \
+    python3-toml \
+    python3-jsonschema \
+    python3-packaging \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+    -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
+    > /etc/apt/sources.list.d/ros2.list
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-desktop \
+    ros-humble-cv-bridge \
+    ros-humble-image-transport \
+    ros-humble-message-filters \
+    ros-humble-tf-transformations \
+    ros-humble-vision-opencv \
+    ros-humble-pcl-ros \
+    ros-humble-ament-cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rosdep init 2>/dev/null || true
+
+WORKDIR /ws
+
+ARG MICRO_XRCE_DDS_AGENT_TAG=v2.4.3
+ARG XRCE_BUILD_JOBS=2
+RUN git clone --depth 1 --branch ${MICRO_XRCE_DDS_AGENT_TAG} https://github.com/eProsima/Micro-XRCE-DDS-Agent.git /tmp/Micro-XRCE-DDS-Agent && \
+    cmake -S /tmp/Micro-XRCE-DDS-Agent -B /tmp/Micro-XRCE-DDS-Agent/build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build /tmp/Micro-XRCE-DDS-Agent/build --parallel ${XRCE_BUILD_JOBS} && \
+    cmake --install /tmp/Micro-XRCE-DDS-Agent/build && \
+    rm -rf /tmp/Micro-XRCE-DDS-Agent
+
+ARG PX4_MSGS_GIT_REF=v1.16.0
+RUN set -e; \
+    mkdir -p /px4_msgs_ws/src; \
+    git clone --depth 1 --branch "${PX4_MSGS_GIT_REF}" https://github.com/PX4/px4_msgs.git /px4_msgs_ws/src/px4_msgs; \
+    source /opt/ros/humble/setup.bash; \
+    cd /px4_msgs_ws; \
+    colcon build --symlink-install
+
+ARG INSTALL_ZED_SDK=true
+ARG ZED_SDK_RUN_URL=https://download.stereolabs.com/zedsdk/5.0/l4t36.3/jetsons
+RUN set -e; \
+    if [[ "${INSTALL_ZED_SDK}" == "true" ]]; then \
+        wget -O /tmp/ZED_SDK.run "${ZED_SDK_RUN_URL}"; \
+        chmod +x /tmp/ZED_SDK.run; \
+        /tmp/ZED_SDK.run silent; \
+        rm -f /tmp/ZED_SDK.run; \
+        echo "ZED SDK installed successfully."; \
+    else \
+        echo "ZED SDK install skipped (INSTALL_ZED_SDK=false). Pass --build-arg INSTALL_ZED_SDK=true to enable."; \
+    fi
+
+ARG ZED_WRAPPER_GIT_BRANCH=humble-v5.0.0
+RUN set -e; \
+    mkdir -p /zed_ws/src; \
+    git clone --depth 1 --branch "${ZED_WRAPPER_GIT_BRANCH}" https://github.com/stereolabs/zed-ros2-wrapper.git /zed_ws/src/zed-ros2-wrapper; \
+    source /opt/ros/humble/setup.bash; \
+    cd /zed_ws; \
+    rosdep update; \
+    rosdep install --from-paths src --ignore-src -r -y; \
+    colcon build --symlink-install --cmake-args=-DCMAKE_BUILD_TYPE=Release
+
+# The L4T ML base image already ships the Jetson CUDA-enabled PyTorch stack.
+RUN python3 -c "import torch, torchvision; print('torch=', torch.__version__, 'cuda=', torch.version.cuda, 'torchvision=', torchvision.__version__); assert torch.version.cuda is not None, 'GPU-enabled Jetson PyTorch is missing from the base image'"
+
+# Keep Python packages at the end so earlier build steps do not overwrite them.
+RUN pip3 install --no-cache-dir --retries 10 --timeout 1000 \
+    ultralytics==8.4.14 \
+    pymavlink==2.4.49 \
+    "onnx>=1.12.0,<2.0.0" \
+    "onnxslim>=0.1.71" \
+    onnxruntime \
+    "transforms3d>=0.4.1" \
+    "opencv-contrib-python<4.12" \
+    pyserial
+
+# Final compatibility pin after all other Python packages have been resolved.
+RUN pip3 install --no-cache-dir --retries 10 --timeout 1000 --upgrade "numpy==1.26.4"
+
+COPY aerial_micro_inspection/docker/entrypoint_real.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["bash"]

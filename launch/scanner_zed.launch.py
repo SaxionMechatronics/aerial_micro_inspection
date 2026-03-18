@@ -33,6 +33,17 @@ def generate_launch_description():
         }.items()
     )
 
+    # Launch inspection USB camera publisher used by the detector/tracker pipeline
+    usb_camera_node = Node(
+        package='aerial_micro_inspection',
+        executable='camera_node',
+        name='camera_node',
+        output='screen',
+        parameters=[{
+            'mission_config_file': mission_config
+        }]
+    )
+
     # Launch ZED camera disabling their navigation and extra components
     zed_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -42,8 +53,8 @@ def generate_launch_description():
             'camera_model': 'zed2',
             'ros_params_override_path': os.path.join(get_package_share_directory('aerial_micro_inspection'), 
                                                      'config', 'zed2_rgb_depth_config.yaml'),
-            #'publish_tf': 'false',
-            #'publish_map_tf': 'false',
+            'publish_tf': 'false',
+            'publish_map_tf': 'false',
         }.items()
     )
 
@@ -51,5 +62,6 @@ def generate_launch_description():
         mission_configs_arg,
         det_mode_arg,
         zed_launch,
+        usb_camera_node,
         scanner_system_launch
     ])
