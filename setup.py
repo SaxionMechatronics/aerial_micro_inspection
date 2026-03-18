@@ -60,6 +60,7 @@ setup(
             'gimbal_node = aerial_micro_inspection.gimbal_node:main',
             'gimbal_tracker = aerial_micro_inspection.gimbal_tracker:main',
             'color_detector = aerial_micro_inspection.color_detector:main',
+            'hsv_tuner = aerial_micro_inspection.hsv_tuner:main',
             'surface_segmentor = aerial_micro_inspection.surface_segmentor:main',
             'micro_detector = aerial_micro_inspection.micro_detector:main',
             'px4_xrce_mission = aerial_micro_inspection.px4_xrce_mission:main',

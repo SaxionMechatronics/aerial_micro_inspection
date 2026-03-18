@@ -46,7 +46,7 @@ class SurfaceSegmentorNode(Node):
                 self.get_logger().info(f"\n\n\n\n\n======= TensorRT Optimized Model Not Found =======\n\n\n\n\n")
                 self.get_logger().info(f"Optimizing the model: {model_path}. This may take a while, but this operation will only happen in this run.\n\n")
 
-                YOLO(model_path).export(format='trt', half=True, verbose=True)
+                YOLO(model_path).export(format='trt', half=True, verbose=False)
 
                 self.get_logger().info(f"\n\nOptimization Done.\n===================================================")
 

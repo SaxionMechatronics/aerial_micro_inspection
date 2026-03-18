@@ -20,7 +20,7 @@ output:
 pipeline:
   det_mode:                   "ai"   # Options: ai, color
   planning_mode:              "sweeping" # Options: pitch_lock, pitch_yaw_lock, sweeping
-  sweeping_overlap:           0.5
+  sweeping_overlap:           0.0
   min_cell_occupancy:         0.3
   enable_nav_tracker_mode:    true
   waypoint_hold_time:         2.0
@@ -28,18 +28,18 @@ pipeline:
 surface_segmentation:
   confidence_threshold: 0.27                                          
   iou_threshold: 0.3
-  target_class_id: 1   
+  target_class_id: 0   
   path: "/home/sarax/Documents/scanner_ws/src/aerial_micro_inspection/weights/yolo11s-seg.pt"  
 
 color_segmentation:
   min_size: 10.0
   ## Green    
-  # h_min: 61
-  # h_max: 104
-  # s_min: 150
-  # s_max: 255
-  # v_min: 131
-  # v_max: 255
+  h_min: 30
+  h_max: 94
+  s_min: 53
+  s_max: 86
+  v_min: 23
+  v_max: 68
 
   ## Red    
   # h_min: 0
@@ -48,14 +48,6 @@ color_segmentation:
   # s_max: 255
   # v_min: 200
   # v_max: 255
-
-    # Red    
-  h_min: 10
-  h_max: 60
-  s_min: 120
-  s_max: 255
-  v_min: 120
-  v_max: 255
 
 micro_detection:
   path: "/home/sarax/Documents/scanner_ws/src/aerial_micro_inspection/weights/yolov10n_eggs.pt"
@@ -70,7 +62,7 @@ gimbal:
 runtime:
   use_sim_time: false
   use_trt: true
-  downsample_visualization: true
+  downsample_visualization: false
   visualization_width: 240
   visualization_height: 160
 
