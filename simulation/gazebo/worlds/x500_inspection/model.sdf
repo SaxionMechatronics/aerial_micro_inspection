@@ -2,7 +2,7 @@
 <sdf version='1.9'>
   <model name='X500_inspection'>
     <include merge='true'>
-      <uri>model://x500</uri>
+      <uri>model://x500_ami</uri>
     </include>
 
     <!-- 

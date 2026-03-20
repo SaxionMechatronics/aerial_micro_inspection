@@ -13,3 +13,10 @@ param set-default MPC_XY_VEL_MAX 1.0
 param set-default MPC_Z_VEL_MAX_UP 1.0
 param set-default MPC_Z_VEL_MAX_DN 1.0
 param set-default MPC_TILTMAX_AIR 30.0
+param set-default EKF2_REQ_EPH 10.0
+param set-default EKF2_REQ_EPV 10.0
+param set-default EKF2_REQ_PDOP 10.0
+param set-default EKF2_REQ_HDRIFT 1.5
+param set-default EKF2_REQ_HDRIFT 1.5
+param set-default EKF2_REQ_VDRIFT 1.0
+param set-default EKF2_REQ_SACC 1.0
