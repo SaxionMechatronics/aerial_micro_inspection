@@ -109,6 +109,11 @@
       <name>prius_hybrid</name>
       <pose>-6 6 0 0 0 0</pose>
     </include>
+    
+    <include>
+	<uri>model://cube</uri>
+	<pose>8 -10 1 0 0 0</pose>
+    </include>
 
     <gui fullscreen="0">
       <camera name="user_camera">

@@ -5,6 +5,10 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
 
+import yaml 
+import numpy as np
+import os
+
 from px4_msgs.msg import OffboardControlMode
 from px4_msgs.msg import TrajectorySetpoint
 from px4_msgs.msg import VehicleCommand
@@ -17,10 +21,12 @@ class OffboardControl(Node):
     def __init__(self):
         super().__init__('minimal_publisher')
 
-        self.declare_parameter('target_waypoint_x', 3.0)
-        self.declare_parameter('target_waypoint_y', -6.5)
-        self.declare_parameter('target_waypoint_z', -2.0)
-        self.declare_parameter('target_yaw_deg', -90.0)
+        viewpoints = self.load_viewpoints()
+
+        self.declare_parameter('target_waypoint_x', viewpoints[0]["position"][0])
+        self.declare_parameter('target_waypoint_y', viewpoints[0]["position"][1])
+        self.declare_parameter('target_waypoint_z', viewpoints[0]["position"][2])
+        self.declare_parameter('target_yaw_deg', -90.0)#-90
         self.declare_parameter('takeoff_altitude_m', 5.0)
         self.declare_parameter('takeoff_hold_s', 20.0)
 
@@ -154,6 +160,31 @@ class OffboardControl(Node):
             self.takeoff_phase_start_s = now_s
 
         self.offboard_setpoint_counter += 1
+
+    def load_viewpoints(self,relative_path="../config/viewpoints.yaml"):
+        """
+        Loads viewpoints from a YAML file.
+        Parameters:
+            relative_path (str): Path to the YAML file relative to the calling script
+        Returns:
+            list of dicts with 'position' and 'target' as numpy arrays
+        """
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, relative_path)
+
+        with open(config_path, "r") as f:
+            data = yaml.safe_load(f)
+
+        viewpoints = []
+        for vp in data["viewpoints"]:
+            viewpoints.append({
+                "position": np.array(vp["position"]),
+                "target":   np.array(vp["target"]),
+                "normal":   np.array(vp["normal"]) if "normal" in vp else None
+            })
+
+        return viewpoints
+
 
 
 def main(args=None):

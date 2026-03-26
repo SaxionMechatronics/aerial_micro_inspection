@@ -26,9 +26,9 @@ def generate_launch_description():
     xrce_udp_port_arg = DeclareLaunchArgument('xrce_udp_port', default_value='8888')
     run_mission_arg = DeclareLaunchArgument('run_mission', default_value='true')
     run_camera_bridge_arg = DeclareLaunchArgument('run_camera_bridge', default_value='true')
-    target_waypoint_x_arg = DeclareLaunchArgument('target_waypoint_x', default_value='3.0')
-    target_waypoint_y_arg = DeclareLaunchArgument('target_waypoint_y', default_value='-6.5')
-    target_waypoint_z_arg = DeclareLaunchArgument('target_waypoint_z', default_value='-2.0')
+    # target_waypoint_x_arg = DeclareLaunchArgument('target_waypoint_x', default_value='3.0')
+    # target_waypoint_y_arg = DeclareLaunchArgument('target_waypoint_y', default_value='-6.5')
+    # target_waypoint_z_arg = DeclareLaunchArgument('target_waypoint_z', default_value='-2.0')
     target_yaw_deg_arg = DeclareLaunchArgument('target_yaw_deg', default_value='-90.0')
 
     # --- Launch configs ---
@@ -40,9 +40,9 @@ def generate_launch_description():
     xrce_udp_port = LaunchConfiguration('xrce_udp_port')
     run_mission = LaunchConfiguration('run_mission')
     run_camera_bridge = LaunchConfiguration('run_camera_bridge')
-    target_waypoint_x = LaunchConfiguration('target_waypoint_x')
-    target_waypoint_y = LaunchConfiguration('target_waypoint_y')
-    target_waypoint_z = LaunchConfiguration('target_waypoint_z')
+    # target_waypoint_x = LaunchConfiguration('target_waypoint_x')
+    # target_waypoint_y = LaunchConfiguration('target_waypoint_y')
+    # target_waypoint_z = LaunchConfiguration('target_waypoint_z')
     target_yaw_deg = LaunchConfiguration('target_yaw_deg')
 
     start_px4 = ExecuteProcess(
@@ -110,9 +110,9 @@ def generate_launch_description():
         name='px4_xrce_mission',
         output='screen',
         parameters=[{
-            'target_waypoint_x': target_waypoint_x,
-            'target_waypoint_y': target_waypoint_y,
-            'target_waypoint_z': target_waypoint_z,
+            # 'target_waypoint_x': target_waypoint_x,
+            # 'target_waypoint_y': target_waypoint_y,
+            # 'target_waypoint_z': target_waypoint_z,
             'target_yaw_deg': target_yaw_deg,
         }],
         condition=IfCondition(run_mission),
@@ -130,9 +130,9 @@ def generate_launch_description():
         xrce_udp_port_arg,
         run_mission_arg,
         run_camera_bridge_arg,
-        target_waypoint_x_arg,
-        target_waypoint_y_arg,
-        target_waypoint_z_arg,
+        # target_waypoint_x_arg,
+        # target_waypoint_y_arg,
+        # target_waypoint_z_arg,
         target_yaw_deg_arg,
         TimerAction(period=1.0, actions=[start_px4]),
         TimerAction(period=3.0, actions=[run_simulation_gazebo]),
