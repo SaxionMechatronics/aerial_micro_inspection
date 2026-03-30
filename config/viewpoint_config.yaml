@@ -1,7 +1,8 @@
 
 ####### MESH PATHS #######
-mesh_path: "../simulation/gazebo/worlds/Prius Hybrid with sensors/model_mesh.obj"
-#mesh_path: "../simulation/gazebo/worlds/cube/meshes/cube.obj"
+# mesh_path: "../simulation/gazebo/worlds/Prius_clean/model_mesh.obj"
+#mesh_path: "../simulation/gazebo/worlds/Prius Hybrid with sensors/model_mesh.obj"
+mesh_path: "../simulation/gazebo/worlds/cube/meshes/cube.obj"
 #mesh_path: "../simulation/gazebo/worlds/Star/star.obj"
 
 #mesh_path: "../simulation/gazebo/worlds/Minecraft Tree/Minecraft Tree.obj"
@@ -14,7 +15,7 @@ camera_config: "../config/simulation/cameras_sim.yaml"
 output_path: "../config/viewpoints.yaml"
 
 ####### VIEWPOINT GENERATION CONFIG #######
-mesh_scale: 0.01
+mesh_scale: 1
 
 resolution_target: 0.001  # metres/pixel
 
@@ -29,6 +30,7 @@ weld_mesh: true
 
 ####### REFERENCE FRAME CONFIG #######
 origin_offset: [10.0,-2.0,0.5] #offset of the reference frame from the world frame [2.0, 8.0, -0.5] 
-#object_offset: [8.0, -10.0, 1.0] #position of the object from the reference frame, cube
-object_offset: [-6.0, 6.0, 0.0] #position of the object from the reference frame, prius
+camera_offset: [0.0, 0.0, 0.26] #position of the camera from the body frame of the drone in NED!
+object_offset: [8.0, -10.0, 1.0] #position of the object from the reference frame, cube
+#object_offset: [-6.0, 6.0, 0.0] #position of the object from the reference frame, prius
 enu_to_ned: true #whether to convert from ENU to NED reference frame

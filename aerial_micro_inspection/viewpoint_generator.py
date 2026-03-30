@@ -129,8 +129,8 @@ def cluster_surfaces(mesh, threshold=0.95):
             cluster_faces.append(face)
 
             for neighbor in adj[face]:
-                #if neighbor in unvisited and np.dot(normals[neighbor], seed_normal) > threshold:
-                if neighbor in unvisited and np.dot(normals[neighbor], normals[face]) > threshold:
+                if neighbor in unvisited and np.dot(normals[neighbor], seed_normal) > threshold:
+                #if neighbor in unvisited and np.dot(normals[neighbor], normals[face]) > threshold:
                     unvisited.remove(neighbor)
                     queue.append(neighbor)
 
@@ -260,7 +260,7 @@ def compute_all_viewpoints(mesh,fx,resolution_target,surfaces):
 
     return viewpoints
 
-def transform_viewpoints_to_ned(viewpoints, translation_object, translation_origin, enu_to_ned=False):
+def transform_viewpoints_to_ned(viewpoints, translation_object, translation_origin, translation_camera, enu_to_ned=False):
     """
     Transforms a list of viewpoints from ENU to NED frame.
     Parameters:
@@ -281,27 +281,19 @@ def transform_viewpoints_to_ned(viewpoints, translation_object, translation_orig
             [1, 0,  0],
             [0, 0, -1]
             ])
-    t = np.array(translation_origin) - np.array(translation_object)  # e.g. [east_offset, north_offset, up_offset]
-
-    def transform_point(p):
-        # Translate to NED origin, then rotate
-        return R @ (p - t)
-
-    def transform_direction(d):
-        # Directions (normal) only rotate, no translation
-        return R @ d
+    t = np.array(translation_origin) - np.array(translation_object)  
 
     transformed = []
     for vp in viewpoints:
         transformed.append({
-            "position": R @ (vp["position"] - t),
+            "position": (R @ (vp["position"] - t)) - np.array(translation_camera),
             "target":   R @ (vp["target"] - t),
             "normal":   R @ vp["normal"]
         })
 
     return transformed
 
-def visualize(mesh, surfaces, viewpoints):
+def visualize(mesh, surfaces, viewpoints, specific_id=-1):
     scene = trimesh.Scene()
     
     scene.add_geometry(mesh)
@@ -334,7 +326,12 @@ def visualize(mesh, surfaces, viewpoints):
         line = create_normal_line(vp["target"], vp["normal"])
         scene.add_geometry(line)
 
+    if specific_id>=0:
+        print(f"Showing viewpoint with id {specific_id}")
+    
     scene.show()
+
+
 
 def save_viewpoints(output_path, viewpoints):
     data = {
@@ -391,19 +388,20 @@ def main():
     viewpoints = compute_all_viewpoints(mesh, fx, resolution_target, surfaces)
 
     print("Viewpoints computed")
-    i=7 #TODO Remove this, only used to select specific waypoint
+    i=1 #TODO Remove this, only used to select specific waypoint
     # Visualize
     if config["visualize"]:
-        #visualize(mesh,surfaces,viewpoints)
+        visualize(mesh,surfaces,viewpoints)
         
         # for j in range(len(surfaces)):
-        #     if j>300:
-        #         visualize(mesh,[surfaces[j]],[viewpoints[j]])
+            
+        #     visualize(mesh,[surfaces[j]],[viewpoints[j]],specific_id=j)
 
 
-        visualize(mesh,[surfaces[i]],[viewpoints[i]])
+        visualize(mesh,[surfaces[i]],[viewpoints[i]],specific_id=i)
     
-    transformed = transform_viewpoints_to_ned(viewpoints,config["object_offset"],config["origin_offset"],config["enu_to_ned"])
+    print(f"Viewpoint used: {viewpoints[i]}")
+    transformed = transform_viewpoints_to_ned(viewpoints,config["object_offset"],config["origin_offset"],config["camera_offset"],enu_to_ned=config["enu_to_ned"])
     # Save
     save_viewpoints(output_path, [transformed[i]])
 
