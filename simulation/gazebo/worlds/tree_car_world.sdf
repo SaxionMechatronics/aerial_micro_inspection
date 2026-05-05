@@ -107,34 +107,13 @@
     <include>
       <uri>model://Prius Hybrid with sensors</uri>
       <name>prius_hybrid</name>
-      <pose>-6 6 0 0 0 0</pose>
+      <pose>20 2 0 0 0 0</pose>
     </include>
     
     <include>
 	<uri>model://cube</uri>
 	<pose>8 -10 1 0 0 0</pose>
     </include>
-    
-    <model name='target_point'>
-      <static>true</static>
-      <pose>8 -2.91 1 0 0 0</pose>
-      <link name='link'>
-        <visual name='visual'>
-          <geometry>
-	    <sphere>
-	      <radius>0.02</radius> 
-	    </sphere>
-          </geometry>
-          <material>
-  	    <script>
-	      <name>Gazebo/Red</name>
-	      <uri>file://media/materials/scripts/gazebo.material</uri>
-	    </script>
-          </material>
-        </visual>
-      </link>
-    </model>
-  
 
     <gui fullscreen="0">
       <camera name="user_camera">

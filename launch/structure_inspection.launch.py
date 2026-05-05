@@ -26,10 +26,7 @@ def generate_launch_description():
     xrce_udp_port_arg = DeclareLaunchArgument('xrce_udp_port', default_value='8888')
     run_mission_arg = DeclareLaunchArgument('run_mission', default_value='true')
     run_camera_bridge_arg = DeclareLaunchArgument('run_camera_bridge', default_value='true')
-    target_waypoint_x_arg = DeclareLaunchArgument('target_waypoint_x', default_value='3.0')
-    target_waypoint_y_arg = DeclareLaunchArgument('target_waypoint_y', default_value='-6.5')
-    target_waypoint_z_arg = DeclareLaunchArgument('target_waypoint_z', default_value='-2.0')
-    target_yaw_deg_arg = DeclareLaunchArgument('target_yaw_deg', default_value='-90.0')
+    mission_config_file_arg = DeclareLaunchArgument('mission_config_file',default_value='/ws/src/aerial_micro_inspection/config/simulation/structural_inspection_config.yaml')
 
     # --- Launch configs ---
     px4_dir = LaunchConfiguration('px4_dir')
@@ -40,10 +37,7 @@ def generate_launch_description():
     xrce_udp_port = LaunchConfiguration('xrce_udp_port')
     run_mission = LaunchConfiguration('run_mission')
     run_camera_bridge = LaunchConfiguration('run_camera_bridge')
-    target_waypoint_x = LaunchConfiguration('target_waypoint_x')
-    target_waypoint_y = LaunchConfiguration('target_waypoint_y')
-    target_waypoint_z = LaunchConfiguration('target_waypoint_z')
-    target_yaw_deg = LaunchConfiguration('target_yaw_deg')
+    mission_config_file = LaunchConfiguration('mission_config_file')
 
     start_px4 = ExecuteProcess(
         cmd=[
@@ -106,16 +100,39 @@ def generate_launch_description():
 
     mission_node = Node(
         package='aerial_micro_inspection',
-        executable='px4_xrce_mission',
-        name='px4_xrce_mission',
+        executable='structural_inspection_mission',
+        name='structural_inspection_mission',
         output='screen',
         parameters=[{
-            'target_waypoint_x': target_waypoint_x,
-            'target_waypoint_y': target_waypoint_y,
-            'target_waypoint_z': target_waypoint_z,
-            'target_yaw_deg': target_yaw_deg,
         }],
         condition=IfCondition(run_mission),
+    )
+
+    rviz_config = os.path.join(pkg_share, "config", "inspection_cam.rviz")
+
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', rviz_config],
+        output='screen'
+    )
+
+    gimbal_node = Node(
+        package='aerial_micro_inspection',
+        executable='gimbal_node',
+        name='gimbal_node',
+        output='screen',
+        parameters=[{
+            'mission_config_file': mission_config_file
+        }]
+    )
+
+    photo_node = Node(
+        package='aerial_micro_inspection',
+        executable='save_image',
+        name='photo_node',
+        output='screen'
     )
 
     param = SetParameter(name='use_sim_time', value=False)
@@ -130,13 +147,13 @@ def generate_launch_description():
         xrce_udp_port_arg,
         run_mission_arg,
         run_camera_bridge_arg,
-        target_waypoint_x_arg,
-        target_waypoint_y_arg,
-        target_waypoint_z_arg,
-        target_yaw_deg_arg,
+        mission_config_file_arg,    
         TimerAction(period=1.0, actions=[start_px4]),
         TimerAction(period=3.0, actions=[run_simulation_gazebo]),
         TimerAction(period=6.0, actions=[xrce_agent]),
         TimerAction(period=8.0, actions=[bridge]),
         TimerAction(period=9.0, actions=[mission_node]),
+        TimerAction(period=9.5, actions=[gimbal_node]),
+        TimerAction(period=10.0, actions=[rviz_node]),
+        TimerAction(period=10.5, actions=[photo_node]),
     ])

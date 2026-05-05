@@ -28,10 +28,10 @@ pipeline:
 surface_segmentation:
   confidence_threshold: 0.27                                          
   iou_threshold: 0.3
-  target_class_id: 0   # Set to a non-negative class id to filter only that segment class
-  path: "/ws/src/aerial_micro_inspection/weights/yolo11n_tree_seg_tuned.pt"  
-  # target_class_id: 2   
-  # path: "/ws/src/aerial_micro_inspection/weights/yolo11s-seg.pt"  
+  # target_class_id: 0   # Set to a non-negative class id to filter only that segment class
+  # path: "/ws/src/aerial_micro_inspection/weights/yolo11n_tree_seg_tuned.pt"  
+  target_class_id: 2   
+  path: "/ws/src/aerial_micro_inspection/weights/yolo11s-seg.pt"  
 
 color_segmentation:
   min_size: 10.0

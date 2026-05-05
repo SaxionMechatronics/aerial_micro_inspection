@@ -1,0 +1,11 @@
+# TakePhoto.action
+# Goal: nothing needed — the node captures whatever is currently on the topics
+---
+# Result
+bool success
+string image_path       # absolute path to the saved .jpg, empty on failure
+string message          # human-readable status / error description
+---
+# Feedback
+string status           # e.g. "Waiting for GPS...", "Saving image..."
+float32 elapsed_sec     # seconds since the goal was accepted
