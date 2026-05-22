@@ -15,13 +15,14 @@ from std_srvs.srv import Trigger
 
 class InspectionPlanner(Node):
 
-    states = ['idle', 'navigate', 'inspect']
+    states = ['idle', 'navigate', 'inspect', 'photo']
 
     def __init__(self):
         super().__init__('inspection_planner')
 
         self.viewpoints = self.load_viewpoints()
         self.navigation_index = 0
+        self.gimbal_index = 0
 
         self.current_pose = None
         self.target_pose = None
@@ -31,6 +32,8 @@ class InspectionPlanner(Node):
         self.arrival_threshold_position = 0.1 #0.05 # 5cm
         self.arrival_threshold_angle = 0.02 # ~1º
         self.viewpoints_sorted=False
+
+        self.start = self.get_clock().now()
 
         self.machine = Machine(
             model=self,
@@ -60,6 +63,18 @@ class InspectionPlanner(Node):
         )
 
         self.machine.add_transition(
+            trigger='take_photo',
+            source='inspect',
+            dest='photo'
+        )
+
+        self.machine.add_transition(
+            trigger='photo_taken',
+            source='photo',
+            dest='inspect'
+        )
+
+        self.machine.add_transition(
             trigger='finish_inspection',
             source='navigate',
             dest='idle'
@@ -75,6 +90,7 @@ class InspectionPlanner(Node):
         )
 
         self.inspection_viewpoint_publisher = self.create_publisher(Pose, 'inspection/viewpoint', 10)
+        self.publisher_gimbal = self.create_publisher(QuaternionStamped,'gimbal/setpoint',10)
 
         self.odometry_sub = self.create_subscription(
             VehicleOdometry,
@@ -105,20 +121,31 @@ class InspectionPlanner(Node):
     def on_enter_navigate(self):
 
         self.navigation_index += 1
+        self.gimbal_index = 0
 
         if self.navigation_index == len(self.viewpoints):
             self.finish_inspection()
         else:
             self.target_pose = self.viewpoints[self.navigation_index]
-            self.gimbal_time = self.get_clock().now()
+            
 
 
     def on_enter_inspect(self):
 
+        if self.gimbal_index == len(self.target_pose['gimbal_pitch']):
+            self.next_position()
+        else:
+
+            self.gimbal_time = self.get_clock().now()
+
+
+
+    def on_enter_photo(self):
+
         self._photo_future = self._photo_client.call_async(Trigger.Request())
 
     def on_enter_idle(self):
-        self.get_logger().info("Inspection finished")
+        self.get_logger().info(f"Inspection finished in {(self.get_clock().now() - self.start).nanoseconds / 1e9} seconds")
 
 
     ################### CALLBACKS ########################
@@ -129,7 +156,7 @@ class InspectionPlanner(Node):
         if not self.viewpoints_sorted:
             self.sort_viewpoints()
             self.target_pose = self.viewpoints[self.navigation_index]
-            self.gimbal_time = self.get_clock().now()
+            
             self.get_logger().info('Viewpoints sorted')
         
         if self.target_pose is not None and self.gimbal_orientation is not None and self.is_navigate():
@@ -149,10 +176,10 @@ class InspectionPlanner(Node):
             dyaw = yaw - self.target_pose['yaw']
 
             # Gimbal angle check, maybe usable with real drone but without proper gimbal feedback, useless
-            g_orientation = self.gimbal_orientation
-            _,g_pitch,g_yaw = self.quaternion_to_euler(g_orientation.w,g_orientation.x,g_orientation.y,g_orientation.z)
-            dpitch = g_pitch - self.target_pose['pitch'][0]
-            dg_yaw = g_yaw - 0 #TODO implement gimbal yaw check with respect required angle for oblique inspection
+            # g_orientation = self.gimbal_orientation
+            # _,g_pitch,g_yaw = self.quaternion_to_euler(g_orientation.w,g_orientation.x,g_orientation.y,g_orientation.z)
+            # dpitch = g_pitch - self.target_pose['pitch'][0]
+            # dg_yaw = g_yaw - 0 #TODO implement gimbal yaw check with respect required angle for oblique inspection
 
             # if not dist < self.arrival_threshold_position:
             #     self.get_logger().info('Position not reached')
@@ -163,9 +190,9 @@ class InspectionPlanner(Node):
             # if not dg_yaw < self.arrival_threshold_angle:
             #     self.get_logger().info('Gimbal yaw not reached')
 
-            elapsed = (self.get_clock().now() - self.gimbal_time).nanoseconds / 1e9
+            
             # if dist < self.arrival_threshold_position and dyaw < self.arrival_threshold_angle and dpitch < self.arrival_threshold_angle and dg_yaw < self.arrival_threshold_angle:
-            if dist < self.arrival_threshold_position and dyaw < self.arrival_threshold_angle and elapsed > 1.0:
+            if dist < self.arrival_threshold_position and dyaw < self.arrival_threshold_angle :
             
                 self.get_logger().info("Arrived to viewpoint, requesting photo...")
                 self.arrived_position()
@@ -181,21 +208,38 @@ class InspectionPlanner(Node):
             msg.position.y=self.target_pose['position'][1]
             msg.position.z=self.target_pose['position'][2]
 
-            pitch=self.target_pose['pitch'][0]
             yaw=self.target_pose['yaw']
 
-            msg.orientation.x,msg.orientation.y,msg.orientation.z,msg.orientation.w=self.euler_to_quaternion(0.0,pitch,yaw)
+            msg.orientation.x,msg.orientation.y,msg.orientation.z,msg.orientation.w=self.euler_to_quaternion(0.0,0.0,yaw)
 
             self.inspection_viewpoint_publisher.publish(msg)
 
         if self.is_inspect():
+            elapsed = (self.get_clock().now() - self.gimbal_time).nanoseconds / 1e9
+
+            x,y,z,w= self.euler_to_quaternion(0.0,self.target_pose['gimbal_pitch'][self.gimbal_index],self.target_pose['gimbal_yaw'][self.gimbal_index]-self.target_pose['yaw'])
+            gimbal_msg = QuaternionStamped()
+            gimbal_msg.header.stamp = self.get_clock().now().to_msg()
+            gimbal_msg.header.frame_id = 'gimbal_base' 
+            gimbal_msg.quaternion.x = x
+            gimbal_msg.quaternion.y = y
+            gimbal_msg.quaternion.z = z
+            gimbal_msg.quaternion.w = w
+            self.publisher_gimbal.publish(gimbal_msg)
+
+            if elapsed > 1.5:
+                self.take_photo()
+
+
+        if self.is_photo():
             if not self._photo_future.done():
                 return
             
             result = self._photo_future.result()
             if result.success:
                 self.get_logger().info("Photo Taken")
-                self.next_position()
+                self.gimbal_index += 1
+                self.photo_taken()
             else:
                 self.get_logger().warn(f'Photo failed: {result.message}, retrying...')
                 self._photo_future = self._photo_client.call_async(Trigger.Request())
@@ -289,9 +333,9 @@ class InspectionPlanner(Node):
             viewpoints.append({
                 "position": np.array(vp["position"]),
                 "yaw": vp["yaw"],
-                "pitch": vp["pitch"],
-                "target":   np.array(vp["target"]),
-                "normal":   np.array(vp["normal"]) if "normal" in vp else None
+                "gimbal_yaw": np.array(vp["gimbal_yaw"]),
+                "gimbal_pitch": np.array(vp["gimbal_pitch"]),
+                "targets":   vp["targets"]
             })
 
         return viewpoints

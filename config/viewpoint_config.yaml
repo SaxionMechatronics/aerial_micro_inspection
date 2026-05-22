@@ -1,7 +1,8 @@
 
 ####### MESH PATHS #######
 mesh_path: "../../simulation/gazebo/worlds/Prius_clean/model_mesh.obj"
-#mesh_path: "../../simulation/gazebo/worlds/Prius Hybrid with sensors/model_mesh.obj"
+#mesh_path: "../../simulation/gazebo/worlds/WindTurbine/Turbine.obj"
+#mesh_path: "../../simulation/gazebo/worlds/Bus/bus.obj"
 #mesh_path: "../../simulation/gazebo/worlds/cube/meshes/cube.obj"
 #mesh_path: "../../simulation/gazebo/worlds/Star/star.obj"
 
@@ -22,7 +23,7 @@ penalty_factor: 1000.0 #penalty factor for the path planner, higher values will 
 ####### VIEWPOINT GENERATION CONFIG #######
 mesh_scale: 0.01
 
-resolution_target: 0.002 #0.0001 takes 26 min  # metres/pixel  First test 0.0006
+resolution_target: 0.001 #0.0001 takes 26 min  # metres/pixel  First test 0.0006
 
 surface_threshold: 0.9 #desired similarity between two triangle normals to be considered as the same surface
 
@@ -30,9 +31,14 @@ visualize: true
 
 subdivide_edge_size: 0.05 #size of the longest edge of a triangle after subdivision
 
-alpha: 0.3 # Reduction of the efective FOV to reduce radial distortion and ensure overlap, 1 means no reduction, 0.8 means 20% reduction  First test 0.95
+alpha: 1.0 # Reduction of the efective FOV to reduce radial distortion, 1 means no reduction, 0.8 means 20% reduction
 
-circular_fov: false #whether to use a circular FOV or a rectangular one, if true, the effective FOV will be reduced to fit a circle inside the rectangle. Used to reduce radial distortion
+beta: 0.9 # Reduction of the effective FOV to ensure overlap, 1 means no reduction, 0.8 means 20% reduction 
+
+max_angle: 10.0 #maximum angle between the camera normal and the surface normal for inspection, in degrees
+
+visualize_heatmap: false #whether to visualize the heatmap of the surface coverage
+
 
 ####### WELDING CONFIG #######
 weld_tolerance: 0.00001 #tolerance for welding vertices
@@ -47,12 +53,23 @@ object_offset: [20.0, 2.0, 0.0] #position of the object from the reference frame
 enu_to_ned: true #whether to convert from ENU to NED reference frame
 
 ####### FILTERS #######
-ground_plane:
-  enabled: true
-  #point: [0.0, 0.0, -1.0]     # For the cube
-  point: [0.0, 0.0, 0.0]     # For the Prius
-  normal: [0.0, 0.0, 1.0]    # normal looking upwards in ENU, in NED it would be [0.0, 0.0, -1.0]
-  min_distance: 0.5          # Minimum distance from the ground plane to consider a point as valid
+plane_filter:
+  ground_plane:
+    enabled: true
+    visualize: true
+    #point: [0.0, 0.0, -1.0]     # For the cube
+    point: [0.0, 0.0, 0.0]     # For the Prius
+    normal: [0.0, 0.0, 1.0]    # normal looking upwards in ENU, in NED it would be [0.0, 0.0, -1.0]
+    #normal: [0.0, 1.0, 0.0]   #for the bus
+    min_distance: 0.5          # Minimum distance from the ground plane to consider a point as valid
+
+  ceiling_plane:
+    enabled: true
+    visualize: true
+    point: [0.0, 0.0, 6.5]     # For the Prius
+    normal: [0.0, 0.0, -1.0]    # normal looking downwards in ENU, in NED it would be [0.0, 0.0, 1.0]
+    min_distance: 0.0          # Minimum distance from the ground plane to consider a point as valid
+
 
 occlude_filter:
   enabled: true

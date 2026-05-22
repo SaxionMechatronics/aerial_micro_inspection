@@ -7,6 +7,8 @@ import math
 import time
 from collections import defaultdict
 from sklearn.cluster import KMeans
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 
 
 def load_config(config_path):
@@ -263,7 +265,7 @@ def compute_bbox_size(points_2d):
     xmax, ymax = points_2d.max(axis=0)
     return xmax - xmin, ymax - ymin
 
-def split_surfaces_with_kmeans(mesh, surfaces, width, height, resolution_target, alpha=0.9, circular_fov=False):
+def split_surfaces_with_kmeans(mesh, surfaces, width, height, resolution_target, alpha=1.0, beta=1.0, circular_fov=False):
     """
     Splits surfaces using iterative KMeans until clusters fit inside camera FOV.
     """
@@ -271,8 +273,8 @@ def split_surfaces_with_kmeans(mesh, surfaces, width, height, resolution_target,
     new_surfaces = []
 
     # --- FOV (simplified as rectangle in meters)
-    fov_w = resolution_target * width * alpha
-    fov_h = resolution_target * height * alpha
+    fov_w = resolution_target * width * alpha * beta
+    fov_h = resolution_target * height * alpha * beta
 
     for surface in surfaces:
 
@@ -357,7 +359,8 @@ def split_surfaces_with_kmeans(mesh, surfaces, width, height, resolution_target,
             new_surfaces.append({
                 "normal": normal,
                 "faces": cluster_faces,
-                "ID": surface['ID']#f"{surface['ID']}_{cluster_id}"
+                "ID": surface['ID'],#f"{surface['ID']}_{cluster_id}"
+                "sub_ID": cluster_id
             })
 
     return new_surfaces
@@ -492,13 +495,18 @@ def compute_viewpoint(mesh, fx, resolution_target, surface):
     viewpoint={
         "position": camera_position,
         "yaw": yaw,
-        "pitch": pitch,
-        "target": center,
+        "gimbal_yaw": [yaw],
+        "gimbal_pitch": [pitch],
+        "targets": [center],
         "normal": normal,
-        "surface_id": surface["ID"]
+        "surface_id": surface["ID"],
+        "surface_sub_id": surface["sub_ID"]
     }
 
     return viewpoint
+
+def build_viewpoint_map(viewpoints):
+    return  {(s["surface_id"], s["surface_sub_id"]): s for s in viewpoints}
 
 def compute_all_viewpoints(mesh,fx,config,surfaces):
 
@@ -513,41 +521,6 @@ def compute_all_viewpoints(mesh,fx,config,surfaces):
     filtered, surfaces = apply_filters(viewpoints,config, mesh, surfaces)
 
     return filtered
-
-def transform_viewpoints_to_ned(viewpoints, translation_object, translation_origin, translation_camera, enu_to_ned=False):
-    """
-    Transforms a list of viewpoints from ENU to NED frame.
-    Parameters:
-        viewpoints (list of dicts): Each dict has 'position', 'target', 'normal' in ENU
-        translation_enu (array-like): [x, y, z] offset of ENU origin w.r.t NED origin, expressed in ENU
-        enu_to_ned (Boolean): Whether to trasnform from ENU to NED or not
-    Returns:
-        list of dicts with the same structure but coordinates in NED
-    """
-    R = np.array([
-        [1, 0,  0],
-        [0, 1,  0],
-        [0, 0, 1]
-        ])
-    if enu_to_ned:
-        R = np.array([
-            [0, 1,  0],
-            [1, 0,  0],
-            [0, 0, -1]
-            ])
-    t = np.array(translation_origin) - np.array(translation_object)  
-
-    transformed = []
-    for vp in viewpoints:
-        transformed.append({
-            "position": (R @ (vp["position"] - t)) - np.array(translation_camera),
-            "yaw": (R @ np.array([0.0,0.0,vp["yaw"]]))[2] + math.pi/2,
-            "pitch": np.array([-vp["pitch"]]),
-            "target":   R @ (vp["target"] - t),
-            "normal":   R @ vp["normal"]
-        })
-
-    return transformed
 
 def visualize(mesh, surfaces, viewpoints, config, specific_id=-1):
     scene = trimesh.Scene()
@@ -579,20 +552,152 @@ def visualize(mesh, surfaces, viewpoints, config, specific_id=-1):
         sphere.apply_translation(vp["position"])
         scene.add_geometry(sphere)
 
-        line = create_normal_line(vp["target"], vp["normal"])
+        line = create_normal_line(vp["targets"][0], vp["normal"])
         scene.add_geometry(line)
 
     if specific_id>=0:
         print(f"Showing viewpoint with id {specific_id}")
 
-    if "ground_plane" in config and config["ground_plane"]["enabled"]:
-        plane = create_plane(
-            np.array(config["ground_plane"]["point"]),
-            np.array(config["ground_plane"]["normal"]),
-            10.0
-        )
-        scene.add_geometry(plane)
+    for cfg in config["plane_filter"].values():
+        if cfg["enabled"] and cfg["visualize"]:
+            plane = create_plane(
+                np.array(cfg["point"]),
+                np.array(cfg["normal"]),
+                10.0
+            )
+            scene.add_geometry(plane)
     
+    scene.show()
+
+def resolution_heat_map(mesh,surfaces,viewpoints,fx,nominal_resolution=None):
+
+    scene = trimesh.Scene()
+
+    # Unmerge vertices so each face owns its vertices independently
+    # This prevents color interpolation bleeding between adjacent faces
+
+    mesh_colored = mesh.copy()
+    mesh_colored.unmerge_vertices()
+
+    # Remove textures
+    mesh_colored.visual = trimesh.visual.ColorVisuals(mesh_colored)
+
+    face_resolution =  np.zeros(len(mesh_colored.faces))
+    face_colors = np.zeros((len(mesh_colored.faces), 4), dtype=np.uint8)
+
+    face_centers = mesh_colored.triangles_center
+    viewpoint_map = build_viewpoint_map(viewpoints)
+
+
+    for surface in surfaces:
+        vp = viewpoint_map.get((surface["ID"], surface["sub_ID"]))
+
+        for face_idx in surface["faces"]:
+
+            center = face_centers[face_idx]
+            position = vp["position"]
+            distance = np.linalg.norm(center-position)
+
+            direction = np.array(center)-np.array(position)
+            direction = direction/np.linalg.norm(direction)
+            normal = surface["normal"]
+            normal_u = normal/np.linalg.norm(normal)
+            angle = np.arccos(np.clip(np.dot(direction, -normal_u), -1.0, 1.0))
+
+            face_resolution[face_idx]=(distance/(fx*np.cos(angle)))*1000
+    
+    nominal_resolution = nominal_resolution * 1000
+    max_res =  face_resolution.max()
+    print(f"Desired resolution: {nominal_resolution}")
+    print(f"Worst resolution: {max_res}")
+    non_zero = face_resolution[face_resolution != 0]
+    min_res = non_zero.min() if non_zero.size > 0 else 0
+    print(f"Best resolution: {min_res}")
+
+    percentage = (non_zero > nominal_resolution).mean() * 100
+
+    print(f'Inspected area over required resolution: {percentage:.3}%')
+    print(f'Mean resolution: {non_zero.mean()}')
+    print(f'Std of the resolution: {non_zero.std()}')
+
+
+    cmap = mpl.colormaps['turbo']
+
+    for i,res in enumerate(face_resolution.tolist()):
+        color = np.array([0,0,0],dtype=np.uint8)
+        if res != 0:
+            normalized = (res - min_res) / (max_res - min_res)
+
+            rgba = cmap(normalized)
+            color = np.array([
+                int(rgba[0] * 255),
+                int(rgba[1] * 255),
+                int(rgba[2] * 255)
+            ], dtype=np.uint8)
+
+        face_colors[i] = [*color, 255]
+
+    mesh_colored.visual.face_colors = face_colors
+
+    scene.add_geometry(mesh_colored)
+
+    # -----------------------------
+    # COLORBAR
+    # -----------------------------
+
+    fig, ax = plt.subplots(figsize=(3, 6))
+    fig.subplots_adjust(left=0.2, right=0.6)
+
+    norm = mpl.colors.Normalize(
+        vmin=min_res,
+        vmax=max_res
+    )
+
+    cb = mpl.colorbar.ColorbarBase(
+        ax,
+        cmap=cmap,
+        norm=norm,
+        orientation='vertical'
+    )
+
+    # Label
+    cb.set_label('Resolution [mm/pixel]', fontsize=12)
+
+    # Show min/max nicely
+    cb.ax.tick_params(labelsize=10)
+
+    # Optional nominal resolution marker
+    if nominal_resolution is not None:
+
+        # Clamp in case it is outside range
+        nominal_resolution = np.clip(
+            nominal_resolution,
+            min_res,
+            max_res
+        )
+
+        # Draw horizontal line
+        cb.ax.hlines(
+            nominal_resolution,
+            0,
+            1,
+            colors='white',
+            linewidth=3
+        )
+
+        # Add text
+        cb.ax.text(
+            1.5,
+            nominal_resolution,
+            f'Nominal\n{nominal_resolution:.4f}',
+            va='center',
+            fontsize=10,
+            color='white'
+        )
+
+    plt.show(block=False)
+    plt.pause(1.0)
+
     scene.show()
 
 def save_viewpoints(output_path, viewpoints):
@@ -601,8 +706,12 @@ def save_viewpoints(output_path, viewpoints):
             {
                 "position": vp["position"].tolist(),
                 "yaw": vp["yaw"],
-                "pitch": vp["pitch"],
-                "target": vp["target"].tolist()
+                "gimbal_yaw": vp["gimbal_yaw"],
+                "gimbal_pitch": vp["gimbal_pitch"],
+                "targets": [
+                    t.tolist() if hasattr(t, 'tolist') else t 
+                    for t in vp["targets"]
+                ]
             }
             for vp in viewpoints
         ]
@@ -615,10 +724,12 @@ def save_viewpoints(output_path, viewpoints):
 
 def apply_filters(viewpoints, config, mesh, surfaces):
 
-    if config["ground_plane"]["enabled"]:
-        viewpoints, removed = filter_ground(viewpoints, config["ground_plane"])
-        for index in sorted(removed, reverse=True):
-            del surfaces[index]
+    for cfg in config["plane_filter"].values():
+        if cfg["enabled"]:
+            viewpoints, removed = filter_plane(viewpoints, cfg)
+            for index in sorted(removed, reverse=True):
+                del surfaces[index]
+                
     if config["occlude_filter"]["enabled"]:
         face_to_surface=build_face_to_surface_map(mesh, surfaces)
         viewpoints,removed = filter_occluded_viewpoints(mesh,viewpoints, face_to_surface)
@@ -627,11 +738,11 @@ def apply_filters(viewpoints, config, mesh, surfaces):
     
     return viewpoints, surfaces
 
-def filter_ground(viewpoints, ground_cfg):
-    p0 = np.array(ground_cfg["point"])
-    n = np.array(ground_cfg["normal"])
+def filter_plane(viewpoints, plane_cfg):
+    p0 = np.array(plane_cfg["point"])
+    n = np.array(plane_cfg["normal"])
     n = n / np.linalg.norm(n)
-    min_dist = ground_cfg["min_distance"]
+    min_dist = plane_cfg["min_distance"]
 
     filtered = []
     removed = []
@@ -654,9 +765,9 @@ def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface):
 
     for i,vp in enumerate(viewpoints):
         origin = vp["position"]
-        target = vp["target"]
+        targets = vp["targets"][0]
 
-        direction = target - origin
+        direction = targets - origin
         direction = direction / np.linalg.norm(direction)
 
         # offset to avoid auto intersection
@@ -719,7 +830,7 @@ def main():
     #Cluster mesh into surfaces:
     surfaces= cluster_surfaces(mesh,config)
     mesh, surfaces= subdivide_surfaces(mesh, surfaces, max_edge=config["subdivide_edge_size"])
-    surfaces = split_surfaces_with_kmeans(mesh,surfaces,width,height,config['resolution_target'],config['alpha'],config['circular_fov'])
+    surfaces = split_surfaces_with_kmeans(mesh,surfaces,width,height,config['resolution_target'],config['alpha'],config['beta'],True)
 
     print(f"Found {len(surfaces)} surfaces!")
 
@@ -742,7 +853,7 @@ def main():
         #     visualize(mesh,[surfaces[j]],[viewpoints[j]],config,specific_id=j)
 
 
-        visualize(mesh,[surfaces[i]],[viewpoints[i]],config,specific_id=i)
+        #visualize(mesh,[surfaces[i]],[viewpoints[i]],config,specific_id=i)
     
     #print(f"Viewpoint used: {viewpoints[i]}")
     #transformed = transform_viewpoints_to_ned(viewpoints,config["object_offset"],config["origin_offset"],config["camera_offset"],enu_to_ned=config["enu_to_ned"])
@@ -752,8 +863,8 @@ def main():
 
 
     print(f"Viewpoints saved to {output_path}")
-
-
+    if config["visualize_heatmap"]:
+        resolution_heat_map(mesh,surfaces,viewpoints,fx,nominal_resolution=config['resolution_target'])
 
 
 

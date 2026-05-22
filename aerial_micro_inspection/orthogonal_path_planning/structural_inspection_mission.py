@@ -5,7 +5,7 @@ import rclpy
 from scipy.spatial.transform import Rotation as R
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
-from geometry_msgs.msg import QuaternionStamped, Pose, PoseStamped
+from geometry_msgs.msg import Pose, PoseStamped
 from nav_msgs.msg import Path
 
 import yaml 
@@ -37,7 +37,6 @@ class OffboardControl(Node):
         self.inspection_viewpoint_y = 0.0
         self.inspection_viewpoint_z = 0.0
         self.inspection_viewpoint_yaw = 0.0
-        self.inspection_viewpoint_pitch = 0.0
         self.inspection_viewpoint_recieved = False
 
         self.declare_parameter('takeoff_altitude_m', 5.0)
@@ -87,7 +86,6 @@ class OffboardControl(Node):
         self.publisher_offboard_mode = self.create_publisher(OffboardControlMode, 'fmu/in/offboard_control_mode', qos_profile_pub)
         self.publisher_trajectory = self.create_publisher(TrajectorySetpoint, 'fmu/in/trajectory_setpoint', qos_profile_pub)
         self.publisher_vehicle_command = self.create_publisher(VehicleCommand, 'fmu/in/vehicle_command', qos_profile_pub)
-        self.publisher_gimbal = self.create_publisher(QuaternionStamped,'gimbal/setpoint',10)
         self.path_publisher = self.create_publisher(Path, "inspection/robot_path", 10)
 
         timer_period = 0.02  # seconds
@@ -104,7 +102,7 @@ class OffboardControl(Node):
         self.takeoff_y = 0.0
 
         self.path_msg = Path()
-        self.path_msg.header.frame_id = "odom"  # TODO CHANGE: match your fixed frame ("map", "odom", etc.)
+        self.path_msg.header.frame_id = "odom"  
 
 
     def publish_vehicle_command(self, command, param1=0.0, param2=0.0):
@@ -140,7 +138,7 @@ class OffboardControl(Node):
         y=msg.orientation.y
         z=msg.orientation.z
         w=msg.orientation.w
-        _,self.inspection_viewpoint_pitch,self.inspection_viewpoint_yaw=self.quaternion_to_euler(w,x,y,z)
+        _,_,self.inspection_viewpoint_yaw=self.quaternion_to_euler(w,x,y,z)
 
         self.inspection_viewpoint_recieved = True
 
@@ -213,16 +211,6 @@ class OffboardControl(Node):
 
         trajectory_msg.yaw = self.inspection_viewpoint_yaw
         self.publisher_trajectory.publish(trajectory_msg)
-        
-        x,y,z,w= self.euler_to_quaternion(0.0,self.inspection_viewpoint_pitch,0.0)
-        pitch = QuaternionStamped()
-        pitch.header.stamp = self.get_clock().now().to_msg()
-        pitch.header.frame_id = 'gimbal_base' 
-        pitch.quaternion.x = x
-        pitch.quaternion.y = y
-        pitch.quaternion.z = z
-        pitch.quaternion.w = w
-        self.publisher_gimbal.publish(pitch)
 
         if self.offboard_setpoint_counter < 10:
             self.offboard_setpoint_counter += 1
