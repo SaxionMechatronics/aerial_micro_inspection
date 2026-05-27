@@ -830,7 +830,7 @@ def visualize(mesh, surfaces, viewpoints, config, specific_id=-1):
             plane = create_plane(
                 np.array(cfg["point"]),
                 np.array(cfg["normal"]),
-                10.0
+                cfg["visualize_size"]
             )
             scene.add_geometry(plane)
     
@@ -858,17 +858,20 @@ def resolution_heat_map(mesh,surfaces,viewpoints,fx,nominal_resolution=None):
 
     for surface in surfaces:
         vp = viewpoint_map.get((surface["ID"], surface["sub_ID"]))
+        position = vp["position"]
+        normal = surface["normal"]
+        normal_u = normal/np.linalg.norm(normal)
+        #position = position + normal_u*np.array([0.0,0.0,0.5]) #Modifacte viewpoint wiht noise
 
         for face_idx in surface["faces"]:
 
             center = face_centers[face_idx]
-            position = vp["position"]
+            
             distance = np.linalg.norm(center-position)
 
             direction = np.array(center)-np.array(position)
             direction = direction/np.linalg.norm(direction)
-            normal = surface["normal"]
-            normal_u = normal/np.linalg.norm(normal)
+            
             angle = np.arccos(np.clip(np.dot(direction, -normal_u), -1.0, 1.0))
 
             face_resolution[face_idx]=(distance/(fx*np.cos(angle)))*1000

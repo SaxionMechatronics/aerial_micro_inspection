@@ -50,13 +50,18 @@ origin_offset: [10.0,-2.0,0.5] #offset of the reference frame from the world fra
 camera_offset: [0.0, 0.0, 0.26] #position of the camera from the body frame of the drone in NED!
 #object_offset: [8.0, -10.0, 1.0] #position of the object from the reference frame, cube
 object_offset: [20.0, 2.0, 0.0] #position of the object from the reference frame, prius
+yaw_difference: 90.0 #yaw difference between object and drone frame, for ENU to NED is 90 degrees
+pitch_difference: 0.0 #pitch difference between object and drone frame, normally will be 0
+roll_difference: 180.0 #roll difference between object and drone frame, for ENU to NED is 180 degrees
 enu_to_ned: true #whether to convert from ENU to NED reference frame
+#From ENU to NED there is 180 roll and -90 yaw
 
 ####### FILTERS #######
 plane_filter:
   ground_plane:
     enabled: true
     visualize: true
+    visualize_size: 10.0         #Size of the visualized plane, in metres of the square side
     #point: [0.0, 0.0, -1.0]     # For the cube
     point: [0.0, 0.0, 0.0]     # For the Prius
     normal: [0.0, 0.0, 1.0]    # normal looking upwards in ENU, in NED it would be [0.0, 0.0, -1.0]
@@ -66,6 +71,7 @@ plane_filter:
   ceiling_plane:
     enabled: true
     visualize: true
+    visualize_size: 10.0       #Size of the visualized plane, in metres of the square side
     point: [0.0, 0.0, 6.5]     # For the Prius
     normal: [0.0, 0.0, -1.0]    # normal looking downwards in ENU, in NED it would be [0.0, 0.0, 1.0]
     min_distance: 0.0          # Minimum distance from the ground plane to consider a point as valid

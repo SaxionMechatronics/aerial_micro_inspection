@@ -59,51 +59,79 @@ def save_path(file_path, ordered_viewpoints):
     with open(file_path, 'w') as f:
         yaml.dump(data, f)
 
-def transform_viewpoints_to_ned(viewpoints, translation_object, translation_origin, translation_camera, enu_to_ned=False):
+import numpy as np
+import math
+
+def rotation_matrix_from_euler(roll: float, pitch: float, yaw: float) -> np.ndarray:
     """
-    Transforms a list of viewpoints from ENU to NED frame.
-    Parameters:
-        viewpoints (list of dicts): Each dict has 'position', 'targets', 'yaw', 'gimbal_yaw', 'gimbal_pitch' in ENU
-        translation_object (array-like): [x, y, z] offset of the object w.r.t. some reference
-        translation_origin (array-like): [x, y, z] offset of ENU origin w.r.t. NED origin, expressed in ENU
-        translation_camera (array-like): [x, y, z] camera offset applied after rotation
-        enu_to_ned (bool): Whether to transform from ENU to NED or not
-    Returns:
-        list of dicts with the same structure but coordinates in NED, angles wrapped to [-pi, pi]
+    Builds a rotation matrix from roll, pitch, yaw (in radians).
+    Convention: intrinsic Tait-Bryan ZYX (yaw applied first, then pitch, then roll).
+    This is standard aerospace / MAVLink / ROS convention.
+    R transforms a vector FROM the source frame TO the target frame.
     """
+    cr, sr = math.cos(roll),  math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(yaw),   math.sin(yaw)
 
-    def wrap_to_pi(angle):
-        """Wraps a scalar or array angle to [-pi, pi]."""
-        return np.arctan2(np.sin(angle), np.cos(angle))
+    # Rz(yaw) @ Ry(pitch) @ Rx(roll)
+    return np.array([
+        [ cy*cp,  cy*sp*sr - sy*cr,  cy*sp*cr + sy*sr],
+        [ sy*cp,  sy*sp*sr + cy*cr,  sy*sp*cr - cy*sr],
+        [-sp,     cp*sr,             cp*cr            ]
+    ])
 
-    R = np.eye(3)
-    if enu_to_ned:
-        R = np.array([
-            [0, 1,  0],
-            [1, 0,  0],
-            [0, 0, -1]
-        ])
 
-    t = np.array(translation_origin) - np.array(translation_object)
+def wrap_to_pi(angle: float) -> float:
+    """Wraps a scalar or array angle to [-pi, pi]."""
+    return np.arctan2(np.sin(angle), np.cos(angle))
+
+
+def transform_viewpoints(viewpoints, t, translation_camera, roll: float = 0.0, pitch: float = 0.0,yaw: float = 0.0, degrees = True):
+
+    # Angles must be defined intrinsically in this order: first Yaw rotation, then pitch, last roll
+    if degrees:
+        yaw = np.deg2rad(yaw)
+        pitch = np.deg2rad(pitch)
+        roll = np.deg2rad(roll)
+    R = rotation_matrix_from_euler(roll, pitch, yaw) 
+
+    def transform_heading(angle_rad: float) -> float:
+        direction = np.array([math.cos(angle_rad), math.sin(angle_rad), 0.0])
+        rotated   = R @ direction
+        return wrap_to_pi(math.atan2(rotated[1], rotated[0]))
+
+    def transform_gimbal_pitch(pitch_rad: float) -> float:
+        # Unit vector pointing in the direction of (0° yaw, pitch_rad elevation)
+        direction = np.array([math.cos(pitch_rad), 0.0, math.sin(pitch_rad)])
+        rotated   = R @ direction
+        # Elevation angle in target frame: atan2(z, horizontal_magnitude)
+        horiz = math.sqrt(rotated[0]**2 + rotated[1]**2)
+        return wrap_to_pi(math.atan2(rotated[2], horiz))
 
     transformed = []
     for vp in viewpoints:
         transformed.append({
+            # --- position & targets: standard affine transform ---
             "position": (R @ (vp["position"] - t)) - np.array(translation_camera),
-            "yaw":         wrap_to_pi((R @ np.array([0.0, 0.0, vp["yaw"]]))[2] + math.pi / 2),
-            "gimbal_yaw":  [wrap_to_pi((R @ np.array([0.0, 0.0, yaw]))[2] + math.pi / 2).tolist()
-                            for yaw in vp["gimbal_yaw"]],
-            "gimbal_pitch": (-vp["gimbal_pitch"]).tolist(),  # add wrap_to_pi here too if pitch can overflow
-            "targets":     [(R @ (np.array(target) - t)).tolist() for target in vp["targets"]],
+            "targets":  [(R @ (np.array(tgt) - t)).tolist() for tgt in vp["targets"]],
+
+            # --- heading angles: rotate as direction vectors ---
+            "yaw":        transform_heading(vp["yaw"]),
+            "gimbal_yaw": [transform_heading(y).tolist() for y in vp["gimbal_yaw"]],
+
+            # --- gimbal pitch: rotate as elevation vector ---
+            "gimbal_pitch": np.array([transform_gimbal_pitch(p) for p in vp["gimbal_pitch"]]),
         })
 
-    
-    # Sort viewpoint by incresing yaw ("clockwise")
-
+    # Sort each viewpoint's gimbal data by increasing yaw (clockwise sweep)
     for vp in transformed:
-
-        vp["gimbal_yaw"],vp["gimbal_pitch"],vp["targets"] = (list(x) for x in zip(*sorted(zip(vp["gimbal_yaw"], vp["gimbal_pitch"], vp["targets"]))))
-
+        vp["gimbal_yaw"], vp["gimbal_pitch"], vp["targets"] = (
+            list(x) for x in zip(*sorted(zip(
+                vp["gimbal_yaw"],
+                vp["gimbal_pitch"].tolist(),
+                vp["targets"]
+            )))
+        )
 
     return transformed
 
@@ -319,7 +347,8 @@ def main():
     print(f"Total length of the path: {distance} meters")
     visualize_path(mesh, ordered_viewpoints)
 
-    transformed = transform_viewpoints_to_ned(ordered_viewpoints,config["object_offset"],config["origin_offset"],config["camera_offset"],enu_to_ned=config["enu_to_ned"])
+    t = np.array(config["origin_offset"]) - np.array(config["object_offset"])
+    transformed = transform_viewpoints(ordered_viewpoints,t,config["camera_offset"],config["roll_difference"],config["pitch_difference"],config["yaw_difference"])
 
     print("Saving path...")
     save_path(output_file, transformed)

@@ -29,7 +29,7 @@ class InspectionPlanner(Node):
         self.gimbal_orientation = None
         self.gimbal_time = None
         self._photo_future = None
-        self.arrival_threshold_position = 0.1 #0.05 # 5cm
+        self.arrival_threshold_position = 0.1 #0.05 # 10cm
         self.arrival_threshold_angle = 0.02 # ~1º
         self.viewpoints_sorted=False
 
