@@ -9,6 +9,7 @@ from transitions import Machine
 
 from geometry_msgs.msg import Pose,QuaternionStamped
 from px4_msgs.msg import VehicleOdometry
+from px4_msgs.msg import VehicleLocalPosition
 
 from std_srvs.srv import Trigger
 
@@ -20,7 +21,8 @@ class InspectionPlanner(Node):
     def __init__(self):
         super().__init__('inspection_planner')
 
-        self.viewpoints = self.load_viewpoints()
+        self.viewpoints_gps = self.load_viewpoints()
+        self.viewpoints = None
         self.navigation_index = 0
         self.gimbal_index = 0
 
@@ -76,7 +78,7 @@ class InspectionPlanner(Node):
 
         self.machine.add_transition(
             trigger='finish_inspection',
-            source='navigate',
+            source='inspect',
             dest='idle'
         )
 
@@ -96,6 +98,12 @@ class InspectionPlanner(Node):
             VehicleOdometry,
             'fmu/out/vehicle_odometry',
             self.vehicle_odometry_callback,
+            qos_profile_sub)
+        
+        self.local_position_sub = self.create_subscription(
+            VehicleLocalPosition,
+            'fmu/out/vehicle_local_position',
+            self.vehicle_local_position_callback,
             qos_profile_sub)
         
         self.gimbal_sub = self.create_subscription(
@@ -123,14 +131,14 @@ class InspectionPlanner(Node):
         self.navigation_index += 1
         self.gimbal_index = 0
 
-        if self.navigation_index == len(self.viewpoints):
-            self.finish_inspection()
-        else:
-            self.target_pose = self.viewpoints[self.navigation_index]
+        self.target_pose = self.viewpoints[self.navigation_index]
             
 
 
     def on_enter_inspect(self):
+        
+        if self.navigation_index == len(self.viewpoints)-1:
+            self.finish_inspection()
 
         if self.gimbal_index == len(self.target_pose['gimbal_pitch']):
             self.next_position()
@@ -153,7 +161,7 @@ class InspectionPlanner(Node):
     def vehicle_odometry_callback(self,msg):
         self.current_pose=msg
 
-        if not self.viewpoints_sorted:
+        if not self.viewpoints_sorted and not self.viewpoints==None:
             self.sort_viewpoints()
             self.target_pose = self.viewpoints[self.navigation_index]
             
@@ -199,6 +207,26 @@ class InspectionPlanner(Node):
 
     def gimbal_orientation_callback(self,msg):
         self.gimbal_orientation=msg.quaternion
+
+    def vehicle_local_position_callback(self, msg):
+        if self.viewpoints==None and msg.ref_lat != 0.0:
+
+            ned_viewpoints = []
+            for vp in self.viewpoints_gps:
+                ned_vp = dict(vp)  # shallow copy, angles carry over as-is
+                ned_vp["position"] = self.gps_to_ned(
+                    vp["position"][0], vp["position"][1], vp["position"][2],
+                    msg.ref_lat, msg.ref_lon, msg.ref_alt
+                )
+                ned_vp["targets"] = [
+                    self.gps_to_ned(t[0], t[1], t[2], msg.ref_lat, msg.ref_lon, msg.ref_alt)
+                    for t in vp["targets"]
+                ]
+                # yaw, gimbal_yaw, gimbal_pitch → untouched, already in NED
+                ned_viewpoints.append(ned_vp)
+
+            self.viewpoints=ned_viewpoints
+            self.get_logger().info("Viewpoints converted to local NED, ready to fly.")
 
     def timer_callback(self):
         
@@ -350,6 +378,41 @@ class InspectionPlanner(Node):
         self.viewpoints = self.viewpoints[start_idx:] + self.viewpoints[:start_idx] + [self.viewpoints[start_idx]]
 
         self.viewpoints_sorted=True  
+
+    def gps_to_ned(
+        self,
+        lat_deg: float,
+        lon_deg: float,
+        alt_m: float,
+        ref_lat_deg: float,
+        ref_lon_deg: float,
+        ref_alt_m: float,
+    ):
+        """
+        Converts absolute GPS (WGS84) to local NED [north, east, down] in metres,
+        given the PX4 local frame origin (ref_lat/ref_lon/ref_alt from vehicle_local_position).
+
+        This is the inverse of your enu_to_gps(), adapted to NED output.
+        """
+        
+        _WGS84_A  = 6_378_137.0
+        _WGS84_E2 = 6.6943799901414e-3
+
+        lat0 = math.radians(ref_lat_deg)
+        lon0 = math.radians(ref_lon_deg)
+
+        
+        N = _WGS84_A / math.sqrt(1 - _WGS84_E2 * math.sin(lat0)**2)
+        M = _WGS84_A * (1 - _WGS84_E2) / (1 - _WGS84_E2 * math.sin(lat0)**2)**1.5
+
+        delta_lat = math.radians(lat_deg  - ref_lat_deg)
+        delta_lon = math.radians(lon_deg  - ref_lon_deg)
+
+        north =  delta_lat * M
+        east  =  delta_lon * N * math.cos(lat0)
+        down  = -(alt_m - ref_alt_m)          # up → down sign flip for NED
+
+        return [north, east, down]
 
 def main(args=None):
     rclpy.init(args=args)

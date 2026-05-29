@@ -1,0 +1,17 @@
+{
+  "v2": {
+    "GazeboSim InspectionCamera": {
+      "projection_type": "brown",
+      "width": 1280,
+      "height": 720,
+      "focal": 4.7571821213,
+      "c_x": 0.0,
+      "c_y": 0.0,
+      "k1": 0.0,
+      "k2": 0.0,
+      "p1": 0.0,
+      "p2": 0.0,
+      "k3": 0.0
+    }
+  }
+}

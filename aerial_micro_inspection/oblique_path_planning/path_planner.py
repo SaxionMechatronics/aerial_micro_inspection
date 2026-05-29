@@ -17,7 +17,7 @@ def load_config(config_path):
         return yaml.safe_load(f)
 
 # ---------------------------
-# Load viewpoints (your format)
+# Load viewpoints 
 # ---------------------------
 def load_viewpoints(file_path):
     with open(file_path, 'r') as f:
@@ -43,7 +43,7 @@ def save_path(file_path, ordered_viewpoints):
     data = {
         "viewpoints": [
             {
-                "position": vp["position"].tolist(),
+                "position": vp["position"],
                 "yaw": vp["yaw"].tolist(),
                 "gimbal_yaw": vp["gimbal_yaw"],
                 "gimbal_pitch": vp["gimbal_pitch"],
@@ -58,9 +58,6 @@ def save_path(file_path, ordered_viewpoints):
     }
     with open(file_path, 'w') as f:
         yaml.dump(data, f)
-
-import numpy as np
-import math
 
 def rotation_matrix_from_euler(roll: float, pitch: float, yaw: float) -> np.ndarray:
     """
@@ -120,20 +117,116 @@ def transform_viewpoints(viewpoints, t, translation_camera, roll: float = 0.0, p
             "gimbal_yaw": [transform_heading(y).tolist() for y in vp["gimbal_yaw"]],
 
             # --- gimbal pitch: rotate as elevation vector ---
-            "gimbal_pitch": np.array([transform_gimbal_pitch(p) for p in vp["gimbal_pitch"]]),
+            "gimbal_pitch": [transform_gimbal_pitch(p).tolist() for p in vp["gimbal_pitch"]],
         })
 
+    return transformed
+
+def enu_to_gps(
+    enu_position: np.ndarray,
+    anchor_lat_deg: float,
+    anchor_lon_deg: float,
+    anchor_alt_m: float,
+):
+    """
+    Converts an ENU Cartesian offset [east, north, up] (metres) to
+    absolute GPS coordinates (WGS84), given a GPS anchor point.
+
+    The anchor is the point whose GPS coordinates correspond to ENU (0, 0, 0).
+
+    Args:
+        enu_position:    np.array [east, north, up] in metres
+        anchor_lat_deg:  GPS latitude  of the ENU origin [degrees]
+        anchor_lon_deg:  GPS longitude of the ENU origin [degrees]
+        anchor_alt_m:    GPS altitude  of the ENU origin [metres, WGS84]
+
+    Returns:
+        (latitude_deg, longitude_deg, altitude_m)
+    """
+
+    # WGS84 ellipsoid constants
+    _WGS84_A  = 6_378_137.0          # semi-major axis [m]
+    _WGS84_E2 = 6.6943799901414e-3   # first eccentricity squared
+
+    lat0 = math.radians(anchor_lat_deg)
+    lon0 = math.radians(anchor_lon_deg)
+    e, n, u = float(enu_position[0]), float(enu_position[1]), float(enu_position[2])
+
+    # Radius of curvature in the prime vertical
+    N = _WGS84_A / math.sqrt(1 - _WGS84_E2 * math.sin(lat0)**2)
+
+    # Latitude: 1 metre north ≈ 1/(M) radians, where M is meridional radius
+    M = _WGS84_A * (1 - _WGS84_E2) / (1 - _WGS84_E2 * math.sin(lat0)**2)**1.5
+    delta_lat = n / M
+    delta_lon = e / (N * math.cos(lat0))
+
+    lat = math.degrees(lat0 + delta_lat)
+    lon = math.degrees(lon0 + delta_lon)
+    alt = anchor_alt_m + u
+
+    return [lat, lon, alt]
+
+
+# ─────────────────────────────────────────────
+#  Full pipeline — Local frame → GPS
+# ─────────────────────────────────────────────
+
+def transform_viewpoints_to_gps(
+    viewpoints,
+    anchor_lat_deg: float,
+    anchor_lon_deg: float,
+    anchor_alt_m: float,
+    translation_frame,
+    translation_camera,
+    roll: float  = 0.0,
+    pitch: float = 0.0,
+    yaw: float   = 0.0,
+) -> list[dict]:
+    """
+    Full pipeline: local frame → ENU → GPS.
+
+    Args:
+        viewpoints:       list of dicts (position, targets, yaw, gimbal_yaw, gimbal_pitch)
+        anchor_lat/lon/alt: GPS coordinates of the ENU frame origin
+        translation_*:    same as transform_viewpoints() — offsets in local frame [m]
+        roll/pitch/yaw:   rotation from local frame to ENU (intrinsic ZYX, radians)
+
+    Returns:
+        list of dicts, same structure, in GPS or NED
+    """
+    # Step 1: local → ENU  (identity if all zeros)
+    enu_viewpoints = transform_viewpoints(
+        viewpoints,
+        translation_frame,
+        translation_camera,
+        roll=roll, pitch=pitch, yaw=yaw,
+    )
+
+    # Step 2: ENU → GPS for positions and targets and ENU → NED for angles
+    for vp in enu_viewpoints:
+        vp["position"] = enu_to_gps(
+            vp["position"], anchor_lat_deg, anchor_lon_deg, anchor_alt_m
+        )
+        vp["targets"] = [
+            enu_to_gps(np.array(t), anchor_lat_deg, anchor_lon_deg, anchor_alt_m)
+            for t in vp["targets"]
+        ]
+
+        vp["yaw"]        = wrap_to_pi(math.pi / 2 - vp["yaw"])
+        vp["gimbal_yaw"] = [wrap_to_pi(math.pi / 2 - y).tolist() for y in vp["gimbal_yaw"]]
+        vp["gimbal_pitch"] = [-p for p in vp["gimbal_pitch"]]
+
     # Sort each viewpoint's gimbal data by increasing yaw (clockwise sweep)
-    for vp in transformed:
+    for vp in enu_viewpoints:
         vp["gimbal_yaw"], vp["gimbal_pitch"], vp["targets"] = (
             list(x) for x in zip(*sorted(zip(
                 vp["gimbal_yaw"],
-                vp["gimbal_pitch"].tolist(),
+                vp["gimbal_pitch"],
                 vp["targets"]
             )))
         )
 
-    return transformed
+    return enu_viewpoints
 
 # ---------------------------
 # Collision checking
@@ -347,8 +440,8 @@ def main():
     print(f"Total length of the path: {distance} meters")
     visualize_path(mesh, ordered_viewpoints)
 
-    t = np.array(config["origin_offset"]) - np.array(config["object_offset"])
-    transformed = transform_viewpoints(ordered_viewpoints,t,config["camera_offset"],config["roll_difference"],config["pitch_difference"],config["yaw_difference"])
+    t = np.array(config["frame_translation"])
+    transformed = transform_viewpoints_to_gps(ordered_viewpoints,config["latitude_reference"],config["longitude_reference"],config["altitude_reference"],t,config["camera_offset"],config["roll_difference"],config["pitch_difference"],config["yaw_difference"])
 
     print("Saving path...")
     save_path(output_file, transformed)

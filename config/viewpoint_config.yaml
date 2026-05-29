@@ -46,15 +46,21 @@ weld_tolerance: 0.00001 #tolerance for welding vertices
 weld_mesh: true
 
 ####### REFERENCE FRAME CONFIG #######
-origin_offset: [10.0,-2.0,0.5] #offset of the reference frame from the world frame [2.0, 8.0, -0.5] 
-camera_offset: [0.0, 0.0, 0.26] #position of the camera from the body frame of the drone in NED!
+#origin_offset: [10.0,-2.0,0.5] #offset of the reference frame from the world frame [2.0, 8.0, -0.5] 
 #object_offset: [8.0, -10.0, 1.0] #position of the object from the reference frame, cube
-object_offset: [20.0, 2.0, 0.0] #position of the object from the reference frame, prius
-yaw_difference: 90.0 #yaw difference between object and drone frame, for ENU to NED is 90 degrees
+#object_offset: [20.0, 2.0, 0.0] #position of the object from the reference frame, prius
+
+camera_offset: [0.0, 0.0, -0.26] #position of the camera from the body frame of the drone in ENU!
+frame_translation: [10.0, 4.0, 0.5] #translation from the obejct frame to the gps reference point, in the local frame coordiantes
+
+latitude_reference: 47.39795305343914
+longitude_reference: 8.546296503754991
+altitude_reference: 0.1744191199541092
+
+yaw_difference: 180.0 #yaw difference between object and drone frame, for ENU to NED is 90 degrees
 pitch_difference: 0.0 #pitch difference between object and drone frame, normally will be 0
-roll_difference: 180.0 #roll difference between object and drone frame, for ENU to NED is 180 degrees
-enu_to_ned: true #whether to convert from ENU to NED reference frame
-#From ENU to NED there is 180 roll and -90 yaw
+roll_difference: 0.0 #roll difference between object and drone frame, for ENU to NED is 180 degrees
+
 
 ####### FILTERS #######
 plane_filter:

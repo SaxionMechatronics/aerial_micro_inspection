@@ -1162,7 +1162,6 @@ def main():
         #visualize(mesh,surfaces,viewpoints,config,specific_id=i)
     
     #print(f"Viewpoint used: {viewpoints[i]}")
-    #transformed = transform_viewpoints_to_ned(viewpoints,config["object_offset"],config["origin_offset"],config["camera_offset"],enu_to_ned=config["enu_to_ned"])
     
     
     # Save

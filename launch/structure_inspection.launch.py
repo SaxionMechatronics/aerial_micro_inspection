@@ -20,7 +20,7 @@ def generate_launch_description():
     # --- Launch args ---
     px4_dir_arg = DeclareLaunchArgument('px4_dir', default_value='/opt/PX4-Autopilot')
     px4_make_target_arg = DeclareLaunchArgument('px4_make_target', default_value='gz_x500_inspection')
-    px4_gz_model_pose_arg = DeclareLaunchArgument('px4_gz_model_pose', default_value='10,-2,0.5,0,0,0')
+    px4_gz_model_pose_arg = DeclareLaunchArgument('px4_gz_model_pose', default_value='30,-2,0.5,0,0,0')
     world_arg = DeclareLaunchArgument('world', default_value=world_path)
     extra_resource_path_arg = DeclareLaunchArgument('extra_resource_path', default_value=worlds_dir)
     xrce_udp_port_arg = DeclareLaunchArgument('xrce_udp_port', default_value='8888')
