@@ -7,9 +7,9 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
 from transitions import Machine
 
-from geometry_msgs.msg import Pose,QuaternionStamped
-from px4_msgs.msg import VehicleOdometry
-from px4_msgs.msg import VehicleLocalPosition
+from geometry_msgs.msg import QuaternionStamped
+from geographic_msgs.msg import GeoPoseStamped
+
 
 from std_srvs.srv import Trigger
 
@@ -21,8 +21,10 @@ class InspectionPlanner(Node):
     def __init__(self):
         super().__init__('inspection_planner')
 
-        self.viewpoints_gps = self.load_viewpoints()
+        self.ref_gps = None
         self.viewpoints = None
+        self.viewpoints_gps = self.load_viewpoints()
+        
         self.navigation_index = 0
         self.gimbal_index = 0
 
@@ -34,7 +36,8 @@ class InspectionPlanner(Node):
         self.arrival_threshold_position = 0.1 #0.05 # 10cm
         self.arrival_threshold_angle = 0.02 # ~1º
         self.viewpoints_sorted=False
-
+        
+ 
         self.start = self.get_clock().now()
 
         self.machine = Machine(
@@ -84,27 +87,14 @@ class InspectionPlanner(Node):
 
         ############## SUBRCIBERS AND PUBLISHERS ##############################
 
-        qos_profile_sub = QoSProfile(
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
-            durability=QoSDurabilityPolicy.VOLATILE,
-            history=QoSHistoryPolicy.KEEP_LAST,
-            depth=10
-        )
-
-        self.inspection_viewpoint_publisher = self.create_publisher(Pose, 'inspection/viewpoint', 10)
+        self.inspection_viewpoint_publisher = self.create_publisher(GeoPoseStamped, 'inspection/viewpoint', 10)
         self.publisher_gimbal = self.create_publisher(QuaternionStamped,'gimbal/setpoint',10)
 
         self.odometry_sub = self.create_subscription(
-            VehicleOdometry,
-            'fmu/out/vehicle_odometry',
+            GeoPoseStamped,
+            'inspection/gps_pose',
             self.vehicle_odometry_callback,
-            qos_profile_sub)
-        
-        self.local_position_sub = self.create_subscription(
-            VehicleLocalPosition,
-            'fmu/out/vehicle_local_position',
-            self.vehicle_local_position_callback,
-            qos_profile_sub)
+            10)
         
         self.gimbal_sub = self.create_subscription(
             QuaternionStamped,
@@ -159,86 +149,69 @@ class InspectionPlanner(Node):
     ################### CALLBACKS ########################
 
     def vehicle_odometry_callback(self,msg):
-        self.current_pose=msg
-
-        if not self.viewpoints_sorted and not self.viewpoints==None:
-            self.sort_viewpoints()
-            self.target_pose = self.viewpoints[self.navigation_index]
-            
-            self.get_logger().info('Viewpoints sorted')
         
-        if self.target_pose is not None and self.gimbal_orientation is not None and self.is_navigate():
+        if not self.ref_gps==None:
+            lat=msg.pose.position.latitude
+            long=msg.pose.position.longitude
+            alt=msg.pose.position.altitude
+            self.current_pose=self.gps_to_ned(lat,long,alt,self.ref_gps[0],self.ref_gps[1],self.ref_gps[2])
             
-            # Position check
-            dx = self.current_pose.position[0] - self.target_pose['position'][0]
-            dy = self.current_pose.position[1] - self.target_pose['position'][1]
-            dz = self.current_pose.position[2] - self.target_pose['position'][2]
-            dist = math.sqrt(dx*dx + dy*dy + dz*dz)
 
-            # Drone angle check
-            w = self.current_pose.q[0]
-            x = self.current_pose.q[1]
-            y = self.current_pose.q[2]
-            z = self.current_pose.q[3]
-            _,_,yaw = self.quaternion_to_euler(w,x,y,z)
-            dyaw = yaw - self.target_pose['yaw']
-
-            # Gimbal angle check, maybe usable with real drone but without proper gimbal feedback, useless
-            # g_orientation = self.gimbal_orientation
-            # _,g_pitch,g_yaw = self.quaternion_to_euler(g_orientation.w,g_orientation.x,g_orientation.y,g_orientation.z)
-            # dpitch = g_pitch - self.target_pose['pitch'][0]
-            # dg_yaw = g_yaw - 0 #TODO implement gimbal yaw check with respect required angle for oblique inspection
-
-            # if not dist < self.arrival_threshold_position:
-            #     self.get_logger().info('Position not reached')
-            # if not dyaw < self.arrival_threshold_angle:
-            #     self.get_logger().info('Drone yaw not reached')
-            # if not dpitch < self.arrival_threshold_angle:
-            #     self.get_logger().info('Gimbal pitch not reached')
-            # if not dg_yaw < self.arrival_threshold_angle:
-            #     self.get_logger().info('Gimbal yaw not reached')
-
+            if not self.viewpoints_sorted and not self.viewpoints==None:
+                self.sort_viewpoints()
+                self.target_pose = self.viewpoints[self.navigation_index]
+                
+                self.get_logger().info('Viewpoints sorted')
             
-            # if dist < self.arrival_threshold_position and dyaw < self.arrival_threshold_angle and dpitch < self.arrival_threshold_angle and dg_yaw < self.arrival_threshold_angle:
-            if dist < self.arrival_threshold_position and dyaw < self.arrival_threshold_angle :
-            
-                self.get_logger().info("Arrived to viewpoint, requesting photo...")
-                self.arrived_position()
+            if self.target_pose is not None and self.gimbal_orientation is not None and self.is_navigate():
+                
+                # Position check
+                dx = self.current_pose[0] - self.target_pose['position'][0]
+                dy = self.current_pose[1] - self.target_pose['position'][1]
+                dz = self.current_pose[2] - self.target_pose['position'][2]
+                dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+
+                # Drone angle check
+                w = msg.pose.orientation.w
+                x = msg.pose.orientation.x
+                y = msg.pose.orientation.y 
+                z = msg.pose.orientation.z
+                _,_,yaw = self.quaternion_to_euler(w,x,y,z)
+                dyaw = yaw - self.target_pose['yaw']
+
+                # Gimbal angle check, maybe usable with real drone but without proper gimbal feedback, useless
+                # g_orientation = self.gimbal_orientation
+                # _,g_pitch,g_yaw = self.quaternion_to_euler(g_orientation.w,g_orientation.x,g_orientation.y,g_orientation.z)
+                # dpitch = g_pitch - self.target_pose['pitch'][0]
+                # dg_yaw = g_yaw - 0 #TODO implement gimbal yaw check with respect required angle for oblique inspection
+
+                
+                # if dist < self.arrival_threshold_position and dyaw < self.arrival_threshold_angle and dpitch < self.arrival_threshold_angle and dg_yaw < self.arrival_threshold_angle:
+                if dist < self.arrival_threshold_position and dyaw < self.arrival_threshold_angle :
+                
+                    self.get_logger().info("Arrived to viewpoint, requesting photo...")
+                    self.arrived_position()
 
     def gimbal_orientation_callback(self,msg):
         self.gimbal_orientation=msg.quaternion
 
-    def vehicle_local_position_callback(self, msg):
-        if self.viewpoints==None and msg.ref_lat != 0.0:
-
-            ned_viewpoints = []
-            for vp in self.viewpoints_gps:
-                ned_vp = dict(vp)  # shallow copy, angles carry over as-is
-                ned_vp["position"] = self.gps_to_ned(
-                    vp["position"][0], vp["position"][1], vp["position"][2],
-                    msg.ref_lat, msg.ref_lon, msg.ref_alt
-                )
-                ned_vp["targets"] = [
-                    self.gps_to_ned(t[0], t[1], t[2], msg.ref_lat, msg.ref_lon, msg.ref_alt)
-                    for t in vp["targets"]
-                ]
-                # yaw, gimbal_yaw, gimbal_pitch → untouched, already in NED
-                ned_viewpoints.append(ned_vp)
-
-            self.viewpoints=ned_viewpoints
-            self.get_logger().info("Viewpoints converted to local NED, ready to fly.")
+            
 
     def timer_callback(self):
         
         if self.target_pose is not None and self.is_navigate():
-            msg = Pose()
-            msg.position.x=self.target_pose['position'][0]
-            msg.position.y=self.target_pose['position'][1]
-            msg.position.z=self.target_pose['position'][2]
+            gps_pose = self.viewpoints_gps[self.navigation_index]
+            msg = GeoPoseStamped()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = 'map'
 
-            yaw=self.target_pose['yaw']
+            msg.pose.position.latitude=gps_pose['position'][0]
+            msg.pose.position.longitude=gps_pose['position'][1]
+            msg.pose.position.altitude=gps_pose['position'][2]
 
-            msg.orientation.x,msg.orientation.y,msg.orientation.z,msg.orientation.w=self.euler_to_quaternion(0.0,0.0,yaw)
+            yaw=gps_pose['yaw']
+
+            msg.pose.orientation.x,msg.pose.orientation.y,msg.pose.orientation.z,msg.pose.orientation.w =self.euler_to_quaternion(0.0,0.0,yaw)
 
             self.inspection_viewpoint_publisher.publish(msg)
 
@@ -366,16 +339,36 @@ class InspectionPlanner(Node):
                 "targets":   vp["targets"]
             })
 
+        self.ref_gps = data["GPS_ref"]
+
+        ned_viewpoints = []
+        for vp in viewpoints:
+            ned_vp = dict(vp)  # shallow copy, angles carry over as-is
+            ned_vp["position"] = self.gps_to_ned(
+                vp["position"][0], vp["position"][1], vp["position"][2],
+                self.ref_gps[0], self.ref_gps[1], self.ref_gps[2]
+            )
+            ned_vp["targets"] = [
+                self.gps_to_ned(t[0], t[1], t[2], self.ref_gps[0], self.ref_gps[1], self.ref_gps[2])
+                for t in vp["targets"]
+            ]
+            # yaw, gimbal_yaw, gimbal_pitch → untouched, already in NED
+            ned_viewpoints.append(ned_vp)
+
+        self.viewpoints=ned_viewpoints
+        self.get_logger().info("Viewpoints converted to local NED, ready to fly.")
+
         return viewpoints
     
     def sort_viewpoints(self):
 
-        start_position = np.array([self.current_pose.position[0],self.current_pose.position[1],self.current_pose.position[2]])
+        start_position = np.array([self.current_pose[0],self.current_pose[1],self.current_pose[2]])
 
         distances = [np.linalg.norm(vp["position"] - start_position) for vp in self.viewpoints]
         start_idx = int(np.argmin(distances))
 
         self.viewpoints = self.viewpoints[start_idx:] + self.viewpoints[:start_idx] + [self.viewpoints[start_idx]]
+        self.viewpoints_gps = self.viewpoints_gps[start_idx:] + self.viewpoints_gps[:start_idx] + [self.viewpoints_gps[start_idx]]
 
         self.viewpoints_sorted=True  
 
@@ -390,9 +383,7 @@ class InspectionPlanner(Node):
     ):
         """
         Converts absolute GPS (WGS84) to local NED [north, east, down] in metres,
-        given the PX4 local frame origin (ref_lat/ref_lon/ref_alt from vehicle_local_position).
-
-        This is the inverse of your enu_to_gps(), adapted to NED output.
+        given the local frame origin (ref_lat/ref_lon/ref_alt ).
         """
         
         _WGS84_A  = 6_378_137.0

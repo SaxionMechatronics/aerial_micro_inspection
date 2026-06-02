@@ -13,8 +13,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from std_srvs.srv import Trigger         
 
 from sensor_msgs.msg import Image, CameraInfo
-from geometry_msgs.msg import Pose
-from px4_msgs.msg import SensorGps
+from geographic_msgs.msg import GeoPoseStamped
 
 from cv_bridge import CvBridge
 import cv2
@@ -32,8 +31,8 @@ from scipy.spatial.transform import Rotation
 SAVE_FOLDER = "/ws/src/aerial_micro_inspection/images"
 
 IMAGE_TOPIC       = "/inspection_cam/rgb_image/image_raw"
-GPS_TOPIC         = "/fmu/out/vehicle_gps_position"
-POSE_TOPIC        = "/inspection/viewpoint"
+DRONE_GPS_TOPIC   = "/inspection/gps_pose"     # GeoPoseStamped — drone fused position + attitude
+POSE_TOPIC        = "/inspection/viewpoint"     # GeoPoseStamped — current target viewpoint
 CAMERA_INFO_TOPIC = "/inspection_cam/rgb_image/camera_info"
 
 SENSOR_WIDTH_MM  = 6.17
@@ -65,8 +64,8 @@ def focal_px_to_mm(fx: float, image_width_px: int, sensor_width_mm: float) -> fl
     return fx * sensor_width_mm / image_width_px
 
 
-def ned_quaternion_to_webodm_angles(pose: Pose):
-    q = pose.orientation
+def ned_quaternion_to_webodm_angles(pose: GeoPoseStamped):
+    q = pose.pose.orientation          # GeoPoseStamped nests orientation under .pose
     rotation = Rotation.from_quat([q.x, q.y, q.z, q.w])
     yaw_deg, pitch_deg, roll_deg = rotation.as_euler('ZYX', degrees=True)
     return yaw_deg, pitch_deg, roll_deg
@@ -84,8 +83,8 @@ class ImageCaptureNode(Node):
         self.bridge = CvBridge()
 
         self.latest_image       = None
-        self.latest_gps         = None
-        self.latest_pose        = None
+        self.latest_drone_gps   = None   # GeoPoseStamped from /inspection/gps_pose
+        self.latest_pose        = None   # GeoPoseStamped from /inspection/viewpoint
         self.latest_camera_info = None
 
         # ReentrantCallbackGroup lets the service callback and the topic
@@ -111,11 +110,11 @@ class ImageCaptureNode(Node):
             callback_group=self._cb_group
         )
         self.create_subscription(
-            SensorGps, GPS_TOPIC, self.gps_callback, qos_profile_sub,
+            GeoPoseStamped, DRONE_GPS_TOPIC, self.drone_gps_callback, qos_profile_sub,
             callback_group=self._cb_group
         )
         self.create_subscription(
-            Pose, POSE_TOPIC, self.pose_callback, 10,
+            GeoPoseStamped, POSE_TOPIC, self.pose_callback, 10,
             callback_group=self._cb_group
         )
         self.create_subscription(
@@ -148,8 +147,8 @@ class ImageCaptureNode(Node):
     def image_callback(self, msg):
         self.latest_image = msg
 
-    def gps_callback(self, msg):
-        self.latest_gps = msg
+    def drone_gps_callback(self, msg):
+        self.latest_drone_gps = msg
 
     def pose_callback(self, msg):
         self.latest_pose = msg
@@ -207,7 +206,7 @@ class ImageCaptureNode(Node):
     def data_ready(self) -> bool:
         return (
             self.latest_image       is not None and
-            self.latest_gps         is not None and
+            self.latest_drone_gps   is not None and
             self.latest_camera_info is not None
         )
 
@@ -248,10 +247,10 @@ class ImageCaptureNode(Node):
         fplane_x = image_width_px  / SENSOR_WIDTH_MM
         fplane_y = image_height_px / SENSOR_HEIGHT_MM
 
-        # GPS
-        lat = self.latest_gps.latitude_deg
-        lon = self.latest_gps.longitude_deg
-        alt = self.latest_gps.altitude_msl_m
+        # GPS — extracted from the drone's fused GeoPoseStamped
+        lat = float(self.latest_drone_gps.pose.position.latitude)
+        lon = float(self.latest_drone_gps.pose.position.longitude)
+        alt = float(self.latest_drone_gps.pose.position.altitude)
 
         lat_ref = b"N" if lat >= 0 else b"S"
         lon_ref = b"E" if lon >= 0 else b"W"

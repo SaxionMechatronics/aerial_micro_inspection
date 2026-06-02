@@ -5,12 +5,9 @@ import rclpy
 from scipy.spatial.transform import Rotation as R
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
-from geometry_msgs.msg import Pose, PoseStamped
+from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
-
-import yaml 
-import numpy as np
-import os
+from geographic_msgs.msg import GeoPoseStamped
 
 from px4_msgs.msg import OffboardControlMode
 from px4_msgs.msg import TrajectorySetpoint
@@ -18,6 +15,7 @@ from px4_msgs.msg import VehicleCommand
 from px4_msgs.msg import VehicleLocalPosition
 from px4_msgs.msg import VehicleStatus
 from px4_msgs.msg import VehicleOdometry
+from px4_msgs.msg import VehicleGlobalPosition, VehicleAttitude
 
 
 class OffboardControl(Node):
@@ -73,7 +71,7 @@ class OffboardControl(Node):
             self.vehicle_local_position_callback,
             qos_profile_sub)
         self.position_sub = self.create_subscription(
-            Pose,
+            GeoPoseStamped,
             'inspection/viewpoint',
             self.inspection_viewpoint_callback,
             qos_profile_sub)
@@ -82,10 +80,24 @@ class OffboardControl(Node):
             'fmu/out/vehicle_odometry',
             self.vehicle_odometry_callback,
             qos_profile_sub)
+
+        self.global_position_sub = self.create_subscription(
+            VehicleGlobalPosition,
+            'fmu/out/vehicle_global_position',
+            self.vehicle_global_position_callback,
+            qos_profile_sub)
+
+        self.attitude_sub = self.create_subscription(
+            VehicleAttitude,
+            'fmu/out/vehicle_attitude',
+            self.vehicle_attitude_callback,
+            qos_profile_sub)
+
         
         self.publisher_offboard_mode = self.create_publisher(OffboardControlMode, 'fmu/in/offboard_control_mode', qos_profile_pub)
         self.publisher_trajectory = self.create_publisher(TrajectorySetpoint, 'fmu/in/trajectory_setpoint', qos_profile_pub)
         self.publisher_vehicle_command = self.create_publisher(VehicleCommand, 'fmu/in/vehicle_command', qos_profile_pub)
+        self.publisher_global_pose = self.create_publisher(GeoPoseStamped, 'inspection/gps_pose', 10)
         self.path_publisher = self.create_publisher(Path, "inspection/robot_path", 10)
 
         timer_period = 0.02  # seconds
@@ -100,6 +112,11 @@ class OffboardControl(Node):
         self.has_local_position = False
         self.takeoff_x = 0.0
         self.takeoff_y = 0.0
+
+        self.ref_lat = None
+        self.ref_long = None
+        self.ref_alt = None
+        self._latest_attitude = None
 
         self.path_msg = Path()
         self.path_msg.header.frame_id = "odom"  
@@ -129,18 +146,53 @@ class OffboardControl(Node):
         self.local_y = float(msg.y)
         self.has_local_position = True
 
-    def inspection_viewpoint_callback(self, msg:Pose):
-        self.inspection_viewpoint_x = msg.position.x
-        self.inspection_viewpoint_y = msg.position.y
-        self.inspection_viewpoint_z = msg.position.z
+        if self.ref_lat==None:
+            self.ref_lat=float(msg.ref_lat)
+            self.ref_long=float(msg.ref_lon)
+            self.ref_alt=float(msg.ref_alt)
 
-        x=msg.orientation.x
-        y=msg.orientation.y
-        z=msg.orientation.z
-        w=msg.orientation.w
+    def inspection_viewpoint_callback(self, msg:GeoPoseStamped):
+
+        lat=msg.pose.position.latitude
+        long=msg.pose.position.longitude
+        alt=msg.pose.position.altitude
+
+        position=self.gps_to_ned(lat,long,alt,self.ref_lat,self.ref_long,self.ref_alt)
+
+        self.inspection_viewpoint_x = position[0]
+        self.inspection_viewpoint_y = position[1]
+        self.inspection_viewpoint_z = position[2]
+
+        x=msg.pose.orientation.x
+        y=msg.pose.orientation.y
+        z=msg.pose.orientation.z
+        w=msg.pose.orientation.w
         _,_,self.inspection_viewpoint_yaw=self.quaternion_to_euler(w,x,y,z)
 
         self.inspection_viewpoint_recieved = True
+
+    def vehicle_attitude_callback(self, msg):
+        self._latest_attitude = msg  # cache it, quaternion is msg.q = [w, x, y, z]
+
+    def vehicle_global_position_callback(self, msg):
+        gps_pose = GeoPoseStamped()
+        gps_pose.header.stamp = self.get_clock().now().to_msg()
+        gps_pose.header.frame_id = 'map'
+
+        # Position from EKF2 fused global position
+        gps_pose.pose.position.latitude  = float(msg.lat)
+        gps_pose.pose.position.longitude = float(msg.lon)
+        gps_pose.pose.position.altitude  = float(msg.alt_ellipsoid)
+
+        # Orientation from latest attitude estimate (also EKF2 fused)
+        if self._latest_attitude is not None:
+            # PX4 VehicleAttitude.q is [w, x, y, z]
+            gps_pose.pose.orientation.w = float(self._latest_attitude.q[0])
+            gps_pose.pose.orientation.x = float(self._latest_attitude.q[1])
+            gps_pose.pose.orientation.y = float(self._latest_attitude.q[2])
+            gps_pose.pose.orientation.z = float(self._latest_attitude.q[3])
+
+        self.publisher_global_pose.publish(gps_pose)
 
     def vehicle_odometry_callback(self, msg):
         pose_stamped = PoseStamped()
@@ -240,61 +292,42 @@ class OffboardControl(Node):
 
         self.offboard_setpoint_counter += 1
 
-    def load_viewpoints(self,relative_path="../../config/path.yaml"):
+    def gps_to_ned(
+        self,
+        lat_deg: float,
+        lon_deg: float,
+        alt_m: float,
+        ref_lat_deg: float,
+        ref_lon_deg: float,
+        ref_alt_m: float,
+    ):
         """
-        Loads viewpoints from a YAML file.
-        Parameters:
-            relative_path (str): Path to the YAML file relative to the calling script
-        Returns:
-            list of dicts with 'position' and 'target' as numpy arrays
+        Converts absolute GPS (WGS84) to local NED [north, east, down] in metres,
+        given the PX4 local frame origin (ref_lat/ref_lon/ref_alt from vehicle_local_position).
+
+        This is the inverse of your enu_to_gps(), adapted to NED output.
         """
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(script_dir, relative_path)
-
-        with open(config_path, "r") as f:
-            data = yaml.safe_load(f)
-
-        viewpoints = []
-        for vp in data["viewpoints"]:
-            viewpoints.append({
-                "position": np.array(vp["position"]),
-                "yaw": vp["yaw"],
-                "pitch": vp["pitch"],
-                "target":   np.array(vp["target"]),
-                "normal":   np.array(vp["normal"]) if "normal" in vp else None
-            })
-
-        return viewpoints
-    
-    def euler_to_quaternion(self, roll: float, pitch: float, yaw: float):
-        """
-        Convert Euler angles (in radians) to a quaternion.
         
-        Uses the ZYX convention (yaw → pitch → roll), which is
-        the standard used in ROS2 / aerospace applications.
+        _WGS84_A  = 6_378_137.0
+        _WGS84_E2 = 6.6943799901414e-3
 
-        Args:
-            roll:  Rotation around X-axis (radians)
-            pitch: Rotation around Y-axis (radians)
-            yaw:   Rotation around Z-axis (radians)
+        lat0 = math.radians(ref_lat_deg)
+        lon0 = math.radians(ref_lon_deg)
 
-        Returns:
-            (x, y, z, w) quaternion tuple
-        """
-        cy = math.cos(yaw   * 0.5)
-        sy = math.sin(yaw   * 0.5)
-        cp = math.cos(pitch * 0.5)
-        sp = math.sin(pitch * 0.5)
-        cr = math.cos(roll  * 0.5)
-        sr = math.sin(roll  * 0.5)
+        
+        N = _WGS84_A / math.sqrt(1 - _WGS84_E2 * math.sin(lat0)**2)
+        M = _WGS84_A * (1 - _WGS84_E2) / (1 - _WGS84_E2 * math.sin(lat0)**2)**1.5
 
-        x = sr * cp * cy - cr * sp * sy
-        y = cr * sp * cy + sr * cp * sy
-        z = cr * cp * sy - sr * sp * cy
-        w = cr * cp * cy + sr * sp * sy
+        delta_lat = math.radians(lat_deg  - ref_lat_deg)
+        delta_lon = math.radians(lon_deg  - ref_lon_deg)
 
-        return x, y, z, w
+        north =  delta_lat * M
+        east  =  delta_lon * N * math.cos(lat0)
+        down  = -(alt_m - ref_alt_m)          # up → down sign flip for NED
 
+        return [north, east, down]
+
+    
 
     def quaternion_to_euler(self, w, x, y, z, degrees=False):
         """

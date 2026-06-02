@@ -39,8 +39,9 @@ def load_viewpoints(file_path):
 # ---------------------------
 # Save path (same format, reordered)
 # ---------------------------
-def save_path(file_path, ordered_viewpoints):
+def save_path(file_path, ordered_viewpoints, ref_gps:list):
     data = {
+        "GPS_ref": ref_gps,
         "viewpoints": [
             {
                 "position": vp["position"],
@@ -440,11 +441,14 @@ def main():
     print(f"Total length of the path: {distance} meters")
     visualize_path(mesh, ordered_viewpoints)
 
+    ref_lat=config["latitude_reference"]
+    ref_long=config["longitude_reference"]
+    ref_alt=config["altitude_reference"]
     t = np.array(config["frame_translation"])
-    transformed = transform_viewpoints_to_gps(ordered_viewpoints,config["latitude_reference"],config["longitude_reference"],config["altitude_reference"],t,config["camera_offset"],config["roll_difference"],config["pitch_difference"],config["yaw_difference"])
+    transformed = transform_viewpoints_to_gps(ordered_viewpoints,ref_lat,ref_long,ref_alt,t,config["camera_offset"],config["roll_difference"],config["pitch_difference"],config["yaw_difference"])
 
     print("Saving path...")
-    save_path(output_file, transformed)
+    save_path(output_file, transformed,[ref_lat,ref_long,ref_alt])
 
     print("Done!")
 
