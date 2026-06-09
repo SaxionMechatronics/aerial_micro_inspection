@@ -3,6 +3,7 @@ import numpy as np
 import networkx as nx
 from networkx.algorithms import approximation as approx
 import trimesh
+import open3d as o3d
 import os
 import math
 import time
@@ -15,6 +16,32 @@ def load_config(config_path):
     """
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
+    
+def save_config(config, config_path):
+    with open(config_path, 'w') as f:
+        yaml.safe_dump(config, f, sort_keys=False)
+
+def load_camera(camera_yaml_path, camera_name="ai_camera"):
+    """
+    Loads the camera parameters from the simulated file, only use for matching file layout
+
+    """
+    with open(camera_yaml_path, 'r') as f:
+        data = yaml.safe_load(f)
+
+    cam = data[camera_name]
+
+    K = cam["camera_matrix"]
+
+    fx = K[0]
+    fy = K[4]
+
+    width = cam["image_width"]
+    height = cam["image_height"]
+
+    offset = cam["body_frame_offset"]
+
+    return fx, fy, width, height, offset
 
 # ---------------------------
 # Load viewpoints 
@@ -389,6 +416,106 @@ def weld_vertices(mesh, tolerance=1e-5):
     new_mesh = trimesh.Trimesh(vertices=vertices, faces=new_faces, process=False)
     
     return new_mesh
+
+def create_axis_cylinders(origin, length=0.1):
+    radius = length * 0.04
+    directions = {
+        'picked_axis_x': (np.array([1.0, 0.0, 0.0]), [255, 0,   0,   255]),
+        'picked_axis_y': (np.array([0.0, 1.0, 0.0]), [0,   255, 0,   255]),
+        'picked_axis_z': (np.array([0.0, 0.0, 1.0]), [0,   0,   255, 255]),
+    }
+    geometries = {}
+    for name, (direction, color) in directions.items():
+        cyl = trimesh.creation.cylinder(radius=radius, height=length, sections=8)
+        z = np.array([0.0, 0.0, 1.0])
+        if not np.allclose(direction, z):
+            cross = np.cross(z, direction)
+            angle = np.arctan2(np.linalg.norm(cross), np.dot(z, direction))
+            rot_matrix = trimesh.transformations.rotation_matrix(angle, cross)
+        else:
+            rot_matrix = np.eye(4)
+        translation = trimesh.transformations.translation_matrix(
+            origin + direction * length / 2
+        )
+        cyl.apply_transform(translation @ rot_matrix)
+        cyl.visual.face_colors = color
+        geometries[name] = cyl
+    return geometries
+
+
+def pick_vertex_on_click(mesh, axis_length=0.1):
+    scene = trimesh.Scene(mesh)
+    picked = {}
+    axis_names = ['picked_axis_x', 'picked_axis_y', 'picked_axis_z']
+
+    viewer = scene.show(start_loop=False)
+
+    @viewer.event
+    def on_mouse_press(x, y, buttons, modifiers):
+        width, height = viewer.width, viewer.height
+
+        ndc_x = (2.0 * x / width) - 1.0
+        ndc_y = (2.0 * y / height) - 1.0
+
+        camera = viewer.scene.camera
+        fov_y = np.radians(camera.fov[1])
+        aspect = width / height
+        tan_half_fov = np.tan(fov_y / 2.0)
+
+        ray_dir_cam = np.array([
+            ndc_x * aspect * tan_half_fov,
+            ndc_y * tan_half_fov,
+            -1.0
+        ])
+
+        cam_to_world = viewer.scene.camera_transform
+        rotation = cam_to_world[:3, :3]
+        ray_dir_world = rotation @ ray_dir_cam
+        ray_dir_world /= np.linalg.norm(ray_dir_world)
+        ray_origin_world = cam_to_world[:3, 3]
+
+        locations, _, _ = mesh.ray.intersects_location(
+            ray_origins=[ray_origin_world],
+            ray_directions=[ray_dir_world]
+        )
+
+        if len(locations) > 0:
+            hit = locations[0]
+            distances = np.linalg.norm(mesh.vertices - hit, axis=1)
+            closest_vertex_idx = np.argmin(distances)
+            closest_vertex = mesh.vertices[closest_vertex_idx]
+            picked['point'] = closest_vertex
+            print(f"\n✓ Vertex index: {closest_vertex_idx}")
+            print(f"  Coordinates:  {closest_vertex}")
+
+            # Remove old axes from scene
+            for name in axis_names:
+                if name in viewer.scene.geometry:
+                    viewer.scene.delete_geometry(name)
+
+            # Add new axes
+            axes = create_axis_cylinders(closest_vertex, length=axis_length)
+            for name, geom in axes.items():
+                viewer.scene.add_geometry(geom, geom_name=name)
+
+            # Force full buffer rebuild in correct order
+            try:
+                viewer._update_meshes()       # rebuild vertex buffers from scene
+                viewer._update_vertex_list()  # push to OpenGL
+                viewer.invalid = True         # mark as needing redraw
+                viewer.on_draw()              # redraw
+                viewer.flip()                 # swap front/back buffer
+            except Exception as e:
+                print(f"Redraw error: {e}")
+
+        else:
+            print("✗ No surface hit.")
+
+    import pyglet
+    pyglet.app.run()
+    return picked.get('point')
+
+
 # ---------------------------
 # Main
 # ---------------------------
@@ -401,18 +528,21 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(script_dir, "../../config/viewpoint_config.yaml")
     config = load_config(config_path)
+    config_path_GPS = os.path.join(script_dir, "../../config/GPS_reference.yaml")
+    config_GPS = load_config(config_path_GPS)
 
     mesh_file = os.path.join(script_dir,config["mesh_path"])
     viewpoints_file = os.path.join(script_dir,config["output_path"])
     output_file = os.path.join(script_dir,config["planning_path"])
+    camera_config_path = os.path.join(script_dir,config["camera_config"])
+    fx, fy, width, height, cam_offset = load_camera(camera_config_path)
 
     print("Loading mesh...")
-    mesh = trimesh.load(mesh_file)
+    mesh = trimesh.load(mesh_file, force='mesh')
     mesh.apply_scale(config["mesh_scale"])
     if config["weld_mesh"]:
         mesh = weld_vertices(mesh, tolerance=config["weld_tolerance"])
-    if isinstance(mesh, trimesh.Scene):
-        mesh = trimesh.util.concatenate(mesh.dump())
+    mesh = mesh.subdivide_to_size(max_edge=config["subdivide_edge_size"])
 
     print("Loading viewpoints...")
     viewpoints = load_viewpoints(viewpoints_file)
@@ -430,6 +560,50 @@ def main():
     end = time.time()
     print(f"Elapsed: {end - start:.4f}s")
 
+    print("Use the current GPS reference? [yes/no]")
+    choose = str(input())
+
+    if choose == "yes":
+        ref_lat=config_GPS["latitude_reference"]
+        ref_long=config_GPS["longitude_reference"]
+        ref_alt=config_GPS["altitude_reference"]
+        t = np.array(config_GPS["frame_translation"])
+        roll_off=config_GPS["roll_difference"]
+        pitch_off=config_GPS["pitch_difference"]
+        yaw_off=config_GPS["yaw_difference"]
+    else:
+        print("Select point as GPS reference. Use W to see vertices. Press Q when done")
+
+        point = pick_vertex_on_click(mesh)
+        print(f"\nFinal selected point: {point}")
+        t = np.array(point)
+
+        print("Put the phone on the object facing in the green axis direction (Local north)")
+        print("Introduce latitude: ")
+        ref_lat= float(input())
+        print("Introduce longitude: ")
+        ref_long= float(input())
+        print("Introduce altitude: ")
+        ref_alt= float(input())
+        print("Introduce difference respect earth's north in degrees: ")
+        yaw_off= float(input())
+        print("Introduce difference in roll in degrees (Normally 0): ")
+        roll_off= float(input())
+        print("Introduce difference in pitch north in degrees (Normally 0): ")
+        pitch_off= float(input())
+
+        config_GPS["latitude_reference"]=ref_lat
+        config_GPS["longitude_reference"]=ref_long
+        config_GPS["altitude_reference"]=ref_alt
+        config_GPS["frame_translation"]=t.tolist()
+        config_GPS["roll_difference"]=roll_off
+        config_GPS["pitch_difference"]=pitch_off
+        config_GPS["yaw_difference"]=yaw_off
+        save_config(config_GPS,config_path_GPS)
+        
+
+
+
     print("Visualizing path...")
 
     previous = viewpoints[0]["position"]
@@ -441,11 +615,9 @@ def main():
     print(f"Total length of the path: {distance} meters")
     visualize_path(mesh, ordered_viewpoints)
 
-    ref_lat=config["latitude_reference"]
-    ref_long=config["longitude_reference"]
-    ref_alt=config["altitude_reference"]
-    t = np.array(config["frame_translation"])
-    transformed = transform_viewpoints_to_gps(ordered_viewpoints,ref_lat,ref_long,ref_alt,t,config["camera_offset"],config["roll_difference"],config["pitch_difference"],config["yaw_difference"])
+    
+    
+    transformed = transform_viewpoints_to_gps(ordered_viewpoints,ref_lat,ref_long,ref_alt,t,cam_offset,roll_off,pitch_off,yaw_off)
 
     print("Saving path...")
     save_path(output_file, transformed,[ref_lat,ref_long,ref_alt])

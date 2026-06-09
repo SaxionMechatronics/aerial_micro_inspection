@@ -37,7 +37,9 @@ def load_camera(camera_yaml_path, camera_name="ai_camera"):
     width = cam["image_width"]
     height = cam["image_height"]
 
-    return fx, fy, width, height
+    offset = cam["body_frame_offset"]
+
+    return fx, fy, width, height, offset
 
 def diagnose_adjacency(mesh):
     avg_adjacency = len(mesh.face_adjacency) / len(mesh.faces)
@@ -162,7 +164,7 @@ def cluster_surfaces(mesh, config):
         if iqr == 0:
             threshold = median_area * config["filter_small_surfaces"].get("fallback_ratio", 0.01)
         else:
-            threshold = median_area - k * iqr
+            threshold = median_area - k * iqr + median_area * config["filter_small_surfaces"]["fine_tune"]
 
         filtered = [c for c, a in zip(clusters, areas) if a >= threshold]
         return filtered
@@ -735,7 +737,7 @@ def apply_filters(viewpoints, config, mesh, surfaces):
 
     if config["occlude_filter"]["enabled"]:
         face_to_surface=build_face_to_surface_map(mesh, surfaces)
-        viewpoints,removed = filter_occluded_viewpoints(mesh,viewpoints, face_to_surface)
+        viewpoints,removed = filter_occluded_viewpoints(mesh,viewpoints, face_to_surface, config)
         for index in sorted(removed, reverse=True):
             del surfaces[index]
     
@@ -762,7 +764,7 @@ def filter_plane(viewpoints, plane_cfg):
 
     return filtered, removed
 
-def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface):
+def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface, config):
     filtered = []
     removed = []
 
@@ -774,7 +776,7 @@ def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface):
         direction = direction / np.linalg.norm(direction)
 
         # offset to avoid auto intersection
-        origin = origin + direction * 1e-3
+        #origin = origin + direction * 1e-3
 
         # Ray cast
         locations, index_ray, index_tri = mesh.ray.intersects_location(
@@ -792,7 +794,7 @@ def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface):
         hit_face = index_tri[closest_idx]
 
         # Check if the face is from the surface
-        if face_to_surface[hit_face] == vp["surface_id"]:
+        if face_to_surface[hit_face] == vp["surface_id"] and np.linalg.norm(targets-locations[closest_idx])>config["occlude_filter"]["permessivity"]:
             filtered.append(vp)
         else:
             removed.append(i)
@@ -812,7 +814,7 @@ def main():
     output_path = os.path.join(script_dir,config["output_path"])
 
     # Load camera
-    fx, fy, width, height = load_camera(camera_config_path)
+    fx, fy, width, height, _ = load_camera(camera_config_path)
 
     print(f"Loaded camera: fx={fx}, fy={fy}, resolution={width}x{height}")
 
@@ -823,8 +825,6 @@ def main():
         mesh = weld_vertices(mesh, tolerance=config["weld_tolerance"])
     #diagnose_adjacency(mesh)
 
-    if isinstance(mesh, trimesh.Scene):
-        mesh = trimesh.util.concatenate(mesh.dump())
 
     #print(f"Mesh loaded. Centroid: {mesh.centroid}")
     #print("Bounding box:", mesh.bounds)

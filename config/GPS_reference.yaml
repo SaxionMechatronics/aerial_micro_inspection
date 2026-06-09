@@ -1,0 +1,10 @@
+frame_translation:
+- -0.2032223579375
+- 0.15671197387500002
+- 1.2
+latitude_reference: 34.5
+longitude_reference: 8.0
+altitude_reference: 0.2
+yaw_difference: 90.0
+pitch_difference: 0.0
+roll_difference: 0.0

@@ -38,7 +38,9 @@ def load_camera(camera_yaml_path, camera_name="ai_camera"):
     width = cam["image_width"]
     height = cam["image_height"]
 
-    return fx, fy, width, height
+    offset = cam["body_frame_offset"]
+
+    return fx, fy, width, height, offset
 
 def diagnose_adjacency(mesh):
     avg_adjacency = len(mesh.face_adjacency) / len(mesh.faces)
@@ -161,9 +163,10 @@ def cluster_surfaces(mesh, config):
 
         # Avoid zero-IQR edge case (e.g. all surfaces same size)
         if iqr == 0:
+            print("Iqr for surface filter became 0, applying fallback ratio")
             threshold = median_area * config["filter_small_surfaces"].get("fallback_ratio", 0.01)
         else:
-            threshold = median_area - k * iqr
+            threshold = median_area - k * iqr + median_area * config["filter_small_surfaces"]["fine_tune"]
 
         filtered = [c for c, a in zip(clusters, areas) if a >= threshold]
         return filtered
@@ -1002,8 +1005,12 @@ def apply_filters(viewpoints, config, mesh, surfaces):
 
     if config["occlude_filter"]["enabled"]:
         face_to_surface=build_face_to_surface_map(mesh, surfaces)
-        viewpoints,removed = filter_occluded_viewpoints(mesh,viewpoints, face_to_surface)
+        viewpoints,removed = filter_occluded_viewpoints(mesh,viewpoints, face_to_surface,config)
         surfaces = [s for s in surfaces if (s["center_3d"]) not in removed]
+
+    if config["interior_filter"]["enabled"]:
+        viewpoints, removed = filter_inside(mesh, viewpoints, config)
+        surfaces = [s for s in surfaces if (s["ID"], s["sub_ID"]) not in removed]
     
     return viewpoints, surfaces
 
@@ -1028,7 +1035,7 @@ def filter_plane(viewpoints, plane_cfg):
 
     return filtered, removed
 
-def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface):
+def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface, config):
     removed_targets = set()
 
     for vp in viewpoints:
@@ -1040,7 +1047,7 @@ def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface):
             direction = -vp["directions"][i]
 
             # offset to avoid auto intersection
-            origin = origin + direction * 1e-3
+            #origin = origin + direction * 1e-3
 
             # Ray cast
             locations, index_ray, index_tri = mesh.ray.intersects_location(
@@ -1059,7 +1066,7 @@ def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface):
             hit_face = index_tri[closest_idx]
 
             # Check if the face is from the surface
-            if not face_to_surface[hit_face] == vp["surface_id"]:
+            if not face_to_surface[hit_face] == vp["surface_id"] and np.linalg.norm(target-locations[closest_idx])>config["occlude_filter"]["permessivity"]:
                 removed_targets.add((target))
                 removed_index.append(i)
 
@@ -1074,6 +1081,21 @@ def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface):
 
     return viewpoints, removed_targets
 
+def filter_inside(mesh, viewpoints, config):
+
+    filtered = []
+    removed = set()
+    voxels = mesh.voxelized(pitch=config["interior_filter"]["voxel_size"])
+    voxels = voxels.fill()
+    for vp in viewpoints:
+        p = np.array(vp["position"])
+        if voxels.is_filled(p):
+            removed.add((vp["surface_id"], vp["surface_sub_id"]))
+        else:
+            filtered.append(vp)
+
+    return filtered, removed
+
 def main():
     #Check execution time
     start = time.time()
@@ -1087,7 +1109,7 @@ def main():
     output_path = os.path.join(script_dir,config["output_path"])
 
     # Load camera
-    fx, fy, width, height = load_camera(camera_config_path)
+    fx, fy, width, height, _ = load_camera(camera_config_path)
 
     print(f"Loaded camera: fx={fx}, fy={fy}, resolution={width}x{height}")
 
@@ -1097,9 +1119,6 @@ def main():
     if config["weld_mesh"]:
         mesh = weld_vertices(mesh, tolerance=config["weld_tolerance"])
     #diagnose_adjacency(mesh)
-
-    if isinstance(mesh, trimesh.Scene):
-        mesh = trimesh.util.concatenate(mesh.dump())
 
     #print(f"Mesh loaded. Centroid: {mesh.centroid}")
     #print("Bounding box:", mesh.bounds)

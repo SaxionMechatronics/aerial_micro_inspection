@@ -35,6 +35,7 @@ ai_camera:
   - -0.01109
   - 0.077884
   - 0.0
+  body_frame_offset: [0.0, 0.0, -0.38] #position of the camera from the body frame of the drone in ENU! The better the approximation, the better the results
 nav_camera:
   topic_name: /zed/zed_node/left_raw/image_raw_color
   image_width: 640

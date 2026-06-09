@@ -122,6 +122,8 @@ class InspectionPlanner(Node):
         self.gimbal_index = 0
 
         self.target_pose = self.viewpoints[self.navigation_index]
+
+        self.get_logger().info("Going to the next viewpoint...")
             
 
 
@@ -184,6 +186,13 @@ class InspectionPlanner(Node):
                 # _,g_pitch,g_yaw = self.quaternion_to_euler(g_orientation.w,g_orientation.x,g_orientation.y,g_orientation.z)
                 # dpitch = g_pitch - self.target_pose['pitch'][0]
                 # dg_yaw = g_yaw - 0 #TODO implement gimbal yaw check with respect required angle for oblique inspection
+
+                #For debug only:
+                self.get_logger().info(f"dx: {dx}")
+                self.get_logger().info(f"dy: {dy}")
+                self.get_logger().info(f"dz: {dz}")
+                self.get_logger().info(f"dyaw: {dyaw}")
+
 
                 
                 # if dist < self.arrival_threshold_position and dyaw < self.arrival_threshold_angle and dpitch < self.arrival_threshold_angle and dg_yaw < self.arrival_threshold_angle:

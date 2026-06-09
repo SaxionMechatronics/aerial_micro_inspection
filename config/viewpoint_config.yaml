@@ -1,13 +1,10 @@
 
 ####### MESH PATHS #######
-mesh_path: "../../simulation/gazebo/worlds/Prius_clean/model_mesh.obj"
-#mesh_path: "../../simulation/gazebo/worlds/WindTurbine/Turbine.obj"
-#mesh_path: "../../simulation/gazebo/worlds/Bus/bus.obj"
+#mesh_path: "../../simulation/gazebo/worlds/Prius_clean/model_mesh.obj"
+#mesh_path: "../../simulation/gazebo/worlds/Bus/bus_clean.obj"
 #mesh_path: "../../simulation/gazebo/worlds/cube/meshes/cube.obj"
-#mesh_path: "../../simulation/gazebo/worlds/Star/star.obj"
-
-#mesh_path: "../../simulation/gazebo/worlds/Minecraft Tree/Minecraft Tree.obj"
-#mesh_path: "../../simulation/gazebo/worlds/Bridge/bridge.obj"
+#mesh_path: "../../simulation/gazebo/worlds/Hunter2/Hunter2.obj"
+mesh_path: "../../simulation/gazebo/worlds/Fake_Blade/Fake_blade.obj"
 
 ####### CAMERA CONFIG PATH #######
 camera_config: "../../config/simulation/cameras_sim.yaml"
@@ -21,7 +18,7 @@ planning_path: "../../config/path.yaml"
 penalty_factor: 1000.0 #penalty factor for the path planner, higher values will result in more conservative paths that avoid occlusions
 
 ####### VIEWPOINT GENERATION CONFIG #######
-mesh_scale: 0.01
+mesh_scale: 0.001
 
 resolution_target: 0.001 #0.0001 takes 26 min  # metres/pixel  First test 0.0006
 
@@ -29,7 +26,7 @@ surface_threshold: 0.9 #desired similarity between two triangle normals to be co
 
 visualize: true
 
-subdivide_edge_size: 0.05 #size of the longest edge of a triangle after subdivision
+subdivide_edge_size: 0.05 #size of the longest edge of a triangle after subdivision, 0.05 for the Prius #0.1 for the bus
 
 alpha: 1.0 # Reduction of the efective FOV to reduce radial distortion, 1 means no reduction, 0.8 means 20% reduction
 
@@ -45,12 +42,44 @@ weld_tolerance: 0.00001 #tolerance for welding vertices
 
 weld_mesh: true
 
-####### REFERENCE FRAME CONFIG #######
-#origin_offset: [10.0,-2.0,0.5] #offset of the reference frame from the world frame [2.0, 8.0, -0.5] 
-#object_offset: [8.0, -10.0, 1.0] #position of the object from the reference frame, cube
-#object_offset: [20.0, 2.0, 0.0] #position of the object from the reference frame, prius
+####### FILTERS #######
+plane_filter:
+  ground_plane:
+    enabled: true
+    visualize: true
+    visualize_size: 5.0         #Size of the visualized plane, in metres of the square side
+    point: [0.0, 0.0, 0.0]     # For the Prius
+    normal: [0.0, 0.0, 1.0]    # normal looking upwards in ENU, in NED it would be [0.0, 0.0, -1.0]
+    min_distance: 0.5          # Minimum distance from the ground plane to consider a point as valid
 
-camera_offset: [0.0, 0.0, -0.26] #position of the camera from the body frame of the drone in ENU!
+  ceiling_plane:
+    enabled: true
+    visualize: true
+    visualize_size: 5.0       #Size of the visualized plane, in metres of the square side
+    point: [0.0, 0.0, 6.0]     # For the Prius
+    normal: [0.0, 0.0, -1.0]    # normal looking downwards in ENU, in NED it would be [0.0, 0.0, 1.0]
+    min_distance: 0.0          # Minimum distance from the ground plane to consider a point as valid
+
+
+occlude_filter:
+  enabled: false
+  permessivity: 0.00 #Extra filter for fine tuning, avoids some surfaces to be deleted by mistake as the base filter is very restrictive. The Higher numebr, the more permissive it is.
+
+interior_filter:
+  enabled: true
+  voxel_size: 0.1 #size of the voxels for the interior filter, in metres
+
+filter_small_surfaces:
+  enabled: true
+  iqr_k: 0.3         # 1.5 for cube, 0.3 for prius
+  fallback_ratio: 0.3 # only used if all surfaces happen to be the same size
+  fine_tune: 0.0      # fine tune the threshold by adding a percentage of the median value, can be positive or negative, for example 0.1 will add 10% of the median value to the threshold, -0.1 will subtract 10% of the median value from the threshold
+  #35 for the bus
+
+
+
+####### REFERENCE FRAME CONFIG #######
+
 frame_translation: [10.0, 4.0, 0.5] #translation from the obejct frame to the gps reference point, in the local frame coordiantes
 
 latitude_reference: 47.39795305343914
@@ -60,33 +89,3 @@ altitude_reference: 0.1744191199541092
 yaw_difference: 180.0 #yaw difference between object and drone frame, for ENU to NED is 90 degrees
 pitch_difference: 0.0 #pitch difference between object and drone frame, normally will be 0
 roll_difference: 0.0 #roll difference between object and drone frame, for ENU to NED is 180 degrees
-
-
-####### FILTERS #######
-plane_filter:
-  ground_plane:
-    enabled: true
-    visualize: true
-    visualize_size: 10.0         #Size of the visualized plane, in metres of the square side
-    #point: [0.0, 0.0, -1.0]     # For the cube
-    point: [0.0, 0.0, 0.0]     # For the Prius
-    normal: [0.0, 0.0, 1.0]    # normal looking upwards in ENU, in NED it would be [0.0, 0.0, -1.0]
-    #normal: [0.0, 1.0, 0.0]   #for the bus
-    min_distance: 0.5          # Minimum distance from the ground plane to consider a point as valid
-
-  ceiling_plane:
-    enabled: true
-    visualize: true
-    visualize_size: 10.0       #Size of the visualized plane, in metres of the square side
-    point: [0.0, 0.0, 6.5]     # For the Prius
-    normal: [0.0, 0.0, -1.0]    # normal looking downwards in ENU, in NED it would be [0.0, 0.0, 1.0]
-    min_distance: 0.0          # Minimum distance from the ground plane to consider a point as valid
-
-
-occlude_filter:
-  enabled: true
-
-filter_small_surfaces:
-  enabled: true
-  iqr_k: 0.3         # 1.5 for cube, 0.3 for prius
-  fallback_ratio: 0.3 # only used if all surfaces happen to be the same size
