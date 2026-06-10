@@ -135,6 +135,19 @@ def generate_launch_description():
         output='screen'
     )
 
+    ned_tf_node = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='world_to_ned_tf',
+        arguments=[
+            '0', '0', '0',                 # translation
+            '0.7071068', '0.7071068', '0', '0',  # quaternion (ENU -> NED approx)
+            'world',
+            'ned'
+        ],
+        output='screen'
+    )
+
     param = SetParameter(name='use_sim_time', value=False)
 
     return LaunchDescription([
@@ -148,6 +161,7 @@ def generate_launch_description():
         run_mission_arg,
         run_camera_bridge_arg,
         mission_config_file_arg,    
+        ned_tf_node,
         TimerAction(period=1.0, actions=[start_px4]),
         TimerAction(period=3.0, actions=[run_simulation_gazebo]),
         TimerAction(period=6.0, actions=[xrce_agent]),

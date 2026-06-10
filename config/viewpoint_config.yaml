@@ -62,7 +62,7 @@ plane_filter:
 
 
 occlude_filter:
-  enabled: false
+  enabled: true
   permessivity: 0.00 #Extra filter for fine tuning, avoids some surfaces to be deleted by mistake as the base filter is very restrictive. The Higher numebr, the more permissive it is.
 
 interior_filter:

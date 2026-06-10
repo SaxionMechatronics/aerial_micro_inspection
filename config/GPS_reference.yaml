@@ -1,10 +1,9 @@
-frame_translation:
-- -0.2032223579375
-- 0.15671197387500002
-- 1.2
-latitude_reference: 34.5
-longitude_reference: 8.0
-altitude_reference: 0.2
-yaw_difference: 90.0
-pitch_difference: 0.0
-roll_difference: 0.0
+frame_translation: [10.0, 4.0, 0.5] #translation from the obejct frame to the gps reference point, in the local frame coordiantes
+
+latitude_reference: 47.39795305343914
+longitude_reference: 8.546296503754991
+altitude_reference: 0.1744191199541092
+
+yaw_difference: 180.0 #yaw difference between object and drone frame, for ENU to NED is 90 degrees
+pitch_difference: 0.0 #pitch difference between object and drone frame, normally will be 0
+roll_difference: 0.0 #roll difference between object and drone frame, for ENU to NED is 180 degrees

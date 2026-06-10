@@ -99,6 +99,8 @@ class OffboardControl(Node):
         self.publisher_vehicle_command = self.create_publisher(VehicleCommand, 'fmu/in/vehicle_command', qos_profile_pub)
         self.publisher_global_pose = self.create_publisher(GeoPoseStamped, 'inspection/gps_pose', 10)
         self.path_publisher = self.create_publisher(Path, "inspection/robot_path", 10)
+        self.pose_publisher = self.create_publisher(PoseStamped, "inspection/robot_pose", 10)
+        self.destination_publisher = self.create_publisher(PoseStamped, "inspection/robot_destination", 10)
 
         timer_period = 0.02  # seconds
         self.timer = self.create_timer(timer_period, self.cmdloop_callback)
@@ -119,7 +121,7 @@ class OffboardControl(Node):
         self._latest_attitude = None
 
         self.path_msg = Path()
-        self.path_msg.header.frame_id = "odom"  
+        self.path_msg.header.frame_id = "ned"  
 
 
     def publish_vehicle_command(self, command, param1=0.0, param2=0.0):
@@ -171,13 +173,46 @@ class OffboardControl(Node):
 
         self.inspection_viewpoint_recieved = True
 
+        pose= PoseStamped()
+        #Transform ENU to NED
+        pose.pose.position.x=position[0]
+        pose.pose.position.y=position[1]
+        pose.pose.position.z=position[2]
+
+        q_ned = R.from_quat([
+            x,  # x
+            y,  # y
+            z,  # z
+            w   # w
+        ])
+
+        ned_to_enu = R.from_euler('x', 180, degrees=True)
+        q_enu = ned_to_enu * q_ned
+        q = q_enu.as_quat()  # returns [x, y, z, w]
+
+        # pose.pose.orientation.x=q[0]
+        # pose.pose.orientation.y=q[1]
+        # pose.pose.orientation.z=q[2]
+        # pose.pose.orientation.w=q[3]
+
+        pose.pose.orientation.x=x
+        pose.pose.orientation.y=y
+        pose.pose.orientation.z=z
+        pose.pose.orientation.w=w
+
+        pose.header.frame_id = "ned"
+        pose.header.stamp = self.get_clock().now().to_msg()
+        self.destination_publisher.publish(pose)
+
+
+
     def vehicle_attitude_callback(self, msg):
         self._latest_attitude = msg  # cache it, quaternion is msg.q = [w, x, y, z]
 
     def vehicle_global_position_callback(self, msg):
         gps_pose = GeoPoseStamped()
         gps_pose.header.stamp = self.get_clock().now().to_msg()
-        gps_pose.header.frame_id = 'map'
+        gps_pose.header.frame_id = 'ned'
 
         # Position from EKF2 fused global position
         gps_pose.pose.position.latitude  = float(msg.lat)
@@ -199,12 +234,12 @@ class OffboardControl(Node):
 
         # --- Header ---
         pose_stamped.header.stamp = self.get_clock().now().to_msg()
-        pose_stamped.header.frame_id = "odom"
+        pose_stamped.header.frame_id = "ned"
 
         # --- Position: NED -> ENU ---
-        pose_stamped.pose.position.x =  float(msg.position[1])  # ENU.x = NED.y
-        pose_stamped.pose.position.y =  float(msg.position[0])  # ENU.y = NED.x
-        pose_stamped.pose.position.z = -float(msg.position[2])  # ENU.z = -NED.z
+        pose_stamped.pose.position.x =  float(msg.position[0])  # ENU.x = NED.y
+        pose_stamped.pose.position.y =  float(msg.position[1])  # ENU.y = NED.x
+        pose_stamped.pose.position.z =  float(msg.position[2])  # ENU.z = -NED.z
 
         # --- Orientation: NED -> ENU ---
         # PX4 quaternion is [w, x, y, z], geometry_msgs expects [x, y, z, w]
@@ -220,12 +255,13 @@ class OffboardControl(Node):
         q_enu = ned_to_enu * q_ned
         q = q_enu.as_quat()  # returns [x, y, z, w]
 
-        pose_stamped.pose.orientation.x = q[0]
-        pose_stamped.pose.orientation.y = q[1]
-        pose_stamped.pose.orientation.z = q[2]
-        pose_stamped.pose.orientation.w = q[3]
+        pose_stamped.pose.orientation.x = float(msg.q[1])
+        pose_stamped.pose.orientation.y = float(msg.q[2])
+        pose_stamped.pose.orientation.z = float(msg.q[3])
+        pose_stamped.pose.orientation.w = float(msg.q[0])
 
         # --- Append to path and publish ---
+        self.pose_publisher.publish(pose_stamped)
         self.path_msg.poses.append(pose_stamped)
         self.path_msg.header.stamp = self.get_clock().now().to_msg()
         self.path_publisher.publish(self.path_msg)

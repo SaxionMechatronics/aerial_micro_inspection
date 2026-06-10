@@ -188,10 +188,10 @@ class InspectionPlanner(Node):
                 # dg_yaw = g_yaw - 0 #TODO implement gimbal yaw check with respect required angle for oblique inspection
 
                 #For debug only:
-                self.get_logger().info(f"dx: {dx}")
-                self.get_logger().info(f"dy: {dy}")
-                self.get_logger().info(f"dz: {dz}")
-                self.get_logger().info(f"dyaw: {dyaw}")
+                # self.get_logger().info(f"dx: {dx}")
+                # self.get_logger().info(f"dy: {dy}")
+                # self.get_logger().info(f"dz: {dz}")
+                # self.get_logger().info(f"dyaw: {dyaw}")
 
 
                 
