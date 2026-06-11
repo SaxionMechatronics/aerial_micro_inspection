@@ -613,7 +613,8 @@ def main():
         previous = vp["position"]
 
     print(f"Total length of the path: {distance} meters")
-    visualize_path(mesh, ordered_viewpoints)
+    if config["visualize"]:
+        visualize_path(mesh, ordered_viewpoints)
 
     
     

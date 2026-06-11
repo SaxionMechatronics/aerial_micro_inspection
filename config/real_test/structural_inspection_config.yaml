@@ -1,0 +1,78 @@
+---
+input: 
+  video_device:               "/dev/v4l/by-id/usb-Sony_ILX-LR1_D518801E89CD-video-index0" #"/dev/v4l/by-id/usb-Sony_ILX-LR1_D518801E89CD-video-index1"                          
+  nav_rgb_topic:              "/zed/zed_node/left/image_rect_color"
+  inspection_topic:           "/camera/image_raw"
+  nav_depth_topic:            "/zed/zed_node/depth/depth_registered"
+  drone_states_topic:         "/odometry"
+  gimbal_orientation_topic:   "/gimbal_orientation"
+  pan_tilt_calibration:       "real_test/cameras_calib.yaml"
+  img_type:                   "rect"                                  
+
+output:
+  # surface_segmentation_topic:      "/surf_seg/segment"
+  # surface_segmentation_vis_topic:  "/surf_seg/vis_image"
+  # micro_detection_topic:           "/micro_det/detections"
+  # micro_detection_vis_topic:       "/micro_det/vis_image"
+  # gimbal_planning_img_topic:       "/planning/vis_image"
+  gimbal_setpoint_topic:           "/gimbal/setpoint"
+
+# pipeline:
+#   det_mode:                   "ai"   # Options: ai, color
+#   planning_mode:              "sweeping" # Options: pitch_lock, pitch_yaw_lock, sweeping
+#   sweeping_overlap:           0.5
+#   min_cell_occupancy:         0.3
+#   enable_nav_tracker_mode:    true
+#   waypoint_hold_time:         2.0
+
+# surface_segmentation:
+#   confidence_threshold: 0.27                                          
+#   iou_threshold: 0.3
+#   target_class_id: -1   # Set to a non-negative class id to filter only that segment class
+#   path: "/home/sarax/det_ws/src/aerial_micro_inspection/weights/yolo11n_tree_seg_tuned.pt"  
+
+# color_segmentation:
+#   min_size: 10.0
+#   ## Green    
+#   # h_min: 61
+#   # h_max: 104
+#   # s_min: 150
+#   # s_max: 255
+#   # v_min: 131
+#   # v_max: 255
+
+#   ## Red    
+#   # h_min: 0
+#   # h_max: 60
+#   # s_min: 150
+#   # s_max: 255
+#   # v_min: 200
+#   # v_max: 255
+
+#     # Red    
+#   h_min: 10
+#   h_max: 60
+#   s_min: 120
+#   s_max: 255
+#   v_min: 120
+#   v_max: 255
+
+# micro_detection:
+#   path: "/home/sarax/det_ws/src/aerial_micro_inspection/weights/yolov10n_eggs.pt"
+#   confidence_threshold: 0.05
+#   iou_threshold: 0.1
+
+gimbal:
+  serial_port: "/dev/ttyTHS1"
+  baudrate: 115200
+  mavlink_url: ""
+
+runtime:
+  use_sim_time: false
+  use_trt: true #false
+  downsample_visualization: false #true
+  visualization_width: 240
+  visualization_height: 160
+
+visualization: true                                                
+...

@@ -1135,7 +1135,7 @@ def main():
     if H == height:
         f=fy
 
-    fov_angle=np.atan2(alpha*beta*H,2*f)
+    fov_angle=math.atan2(alpha*beta*H,2*f)
 
     r_ex=f*config['resolution_target']*(np.sin(max_angle+fov_angle)/np.cos(fov_angle))*np.cos(max_angle)
     d_ex=f*config['resolution_target']*(np.cos(max_angle+fov_angle)/np.cos(fov_angle))*np.cos(max_angle)
