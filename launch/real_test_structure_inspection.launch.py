@@ -26,7 +26,7 @@ def generate_launch_description():
     xrce_udp_port_arg = DeclareLaunchArgument('xrce_udp_port', default_value='8888')
     run_mission_arg = DeclareLaunchArgument('run_mission', default_value='true')
     run_camera_bridge_arg = DeclareLaunchArgument('run_camera_bridge', default_value='true')
-    mission_config_file_arg = DeclareLaunchArgument('mission_config_file',default_value='/ws/src/aerial_micro_inspection/config/real_test/structural_inspection_config.yaml')
+    mission_config_file_arg = DeclareLaunchArgument('mission_config_file',default_value='/home/sarax/Documents/scanner_ws/src/aerial_micro_inspection/config/real_test/structural_inspection_config.yaml')
 
     # --- Launch configs ---
     px4_dir = LaunchConfiguration('px4_dir')
@@ -108,15 +108,15 @@ def generate_launch_description():
     #     condition=IfCondition(run_mission),
     # )
 
-    rviz_config = os.path.join(pkg_share, "config", "real_test_inspection_cam.rviz")
+    # rviz_config = os.path.join(pkg_share, "config", "real_test_inspection_cam.rviz")
 
-    rviz_node = Node(
-        package='rviz2',
-        executable='rviz2',
-        name='rviz2',
-        arguments=['-d', rviz_config],
-        output='screen'
-    )
+    # rviz_node = Node(
+    #     package='rviz2',
+    #     executable='rviz2',
+    #     name='rviz2',
+    #     arguments=['-d', rviz_config],
+    #     output='screen'
+    # )
 
     gimbal_node = Node(
         package='aerial_micro_inspection',
@@ -140,7 +140,7 @@ def generate_launch_description():
 
     # photo_node = Node(
     #     package='aerial_micro_inspection',
-    #     executable='save_image',
+    #     executable='real_test_save_image',
     #     name='photo_node',
     #     output='screen'
     # )
@@ -179,6 +179,6 @@ def generate_launch_description():
         #TimerAction(period=9.0, actions=[mission_node]),
         TimerAction(period=9.5, actions=[gimbal_node]),
         TimerAction(period=10.0, actions=[camera_node]),
-        TimerAction(period=10.5, actions=[rviz_node]),
+        #TimerAction(period=10.5, actions=[rviz_node]),
         #TimerAction(period=11.0, actions=[photo_node]),
     ])

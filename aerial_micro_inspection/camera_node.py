@@ -1,9 +1,9 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
+from sensor_msgs.msg import CompressedImage
 import cv2
 import yaml
+import time
 
 class CameraNode(Node):
     def __init__(self):
@@ -18,7 +18,7 @@ class CameraNode(Node):
         fps = self.get_parameter('fps').get_parameter_value().integer_value
         device = self.config['input']['video_device']
 
-        self.cap = cv2.VideoCapture(device)
+        self.cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
         self.cap.set(cv2.CAP_PROP_FPS, fps)
 
         if not self.cap.isOpened():
@@ -27,8 +27,7 @@ class CameraNode(Node):
 
         input_cfg = self.config.get('input', {})
         inspection_topic = input_cfg.get('inspection_topic', input_cfg.get('ai_image_topic'))
-        self.publisher_ = self.create_publisher(Image, inspection_topic, 1)
-        self.br = CvBridge()
+        self.publisher_ = self.create_publisher(CompressedImage, inspection_topic, 1)
         self.timer = self.create_timer(1.0 / fps, self.timer_callback)
 
     def timer_callback(self):
@@ -36,9 +35,25 @@ class CameraNode(Node):
         if not ret:
             self.get_logger().warn("Frame capture failed")
             return
-        msg = self.br.cv2_to_imgmsg(frame, 'bgr8')
+
+        success, encoded = cv2.imencode(
+            ".jpg",
+            frame,
+            [cv2.IMWRITE_JPEG_QUALITY, 90]
+        )
+
+        if not success:
+            self.get_logger().warn("JPEG encoding failed")
+            return
+
+        msg = CompressedImage()
+
         msg.header.stamp = self.get_clock().now().to_msg()
+        msg.format = "jpeg"
+        msg.data = encoded.tobytes()
+
         self.publisher_.publish(msg)
+
 
 def main(args=None):
     rclpy.init(args=args)

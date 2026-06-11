@@ -66,6 +66,7 @@ setup(
             'structural_inspection_mission = aerial_micro_inspection.orthogonal_path_planning.structural_inspection_mission:main',
             'structural_inspection_planner = aerial_micro_inspection.orthogonal_path_planning.structural_inspection_planner:main',
             'save_image = aerial_micro_inspection.orthogonal_path_planning.save_image:main',
+            'real_test_save_image = aerial_micro_inspection.orthogonal_path_planning.real_test_save_image:main',
             'gazebo_ros_bridge = aerial_micro_inspection.gazebo_ros_bridge:main'
         ],
     },
