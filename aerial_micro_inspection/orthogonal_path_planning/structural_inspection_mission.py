@@ -94,9 +94,9 @@ class OffboardControl(Node):
             qos_profile_sub)
 
         
-        self.publisher_offboard_mode = self.create_publisher(OffboardControlMode, 'fmu/in/offboard_control_mode', qos_profile_pub)
-        self.publisher_trajectory = self.create_publisher(TrajectorySetpoint, 'fmu/in/trajectory_setpoint', qos_profile_pub)
-        self.publisher_vehicle_command = self.create_publisher(VehicleCommand, 'fmu/in/vehicle_command', qos_profile_pub)
+        #self.publisher_offboard_mode = self.create_publisher(OffboardControlMode, 'fmu/in/offboard_control_mode', qos_profile_pub)
+        #self.publisher_trajectory = self.create_publisher(TrajectorySetpoint, 'fmu/in/trajectory_setpoint', qos_profile_pub)
+        #self.publisher_vehicle_command = self.create_publisher(VehicleCommand, 'fmu/in/vehicle_command', qos_profile_pub)
         self.publisher_global_pose = self.create_publisher(GeoPoseStamped, 'inspection/gps_pose', 10)
         self.path_publisher = self.create_publisher(Path, "inspection/robot_path", 10)
         self.pose_publisher = self.create_publisher(PoseStamped, "inspection/robot_pose", 10)
@@ -135,7 +135,7 @@ class OffboardControl(Node):
         vehicle_command.source_system = 1
         vehicle_command.source_component = 1
         vehicle_command.from_external = True
-        self.publisher_vehicle_command.publish(vehicle_command)
+        #self.publisher_vehicle_command.publish(vehicle_command)
 
     def vehicle_status_callback(self, msg):
         print("NAV_STATUS: ", msg.nav_state)
@@ -277,7 +277,7 @@ class OffboardControl(Node):
         offboard_msg.position=True
         offboard_msg.velocity=False
         offboard_msg.acceleration=False
-        self.publisher_offboard_mode.publish(offboard_msg)
+        #self.publisher_offboard_mode.publish(offboard_msg)
 
         trajectory_msg = TrajectorySetpoint()
         trajectory_msg.timestamp = now_us
@@ -298,7 +298,7 @@ class OffboardControl(Node):
                 trajectory_msg.position[2] = self.inspection_viewpoint_z
 
         trajectory_msg.yaw = self.inspection_viewpoint_yaw
-        self.publisher_trajectory.publish(trajectory_msg)
+        #self.publisher_trajectory.publish(trajectory_msg)
 
         if self.offboard_setpoint_counter < 10:
             self.offboard_setpoint_counter += 1

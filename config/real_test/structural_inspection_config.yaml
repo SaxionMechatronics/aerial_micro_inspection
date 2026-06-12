@@ -2,7 +2,7 @@
 input: 
   video_device:               "/dev/v4l/by-id/usb-Sony_ILX-LR1_D518801E89CD-video-index0" #"/dev/v4l/by-id/usb-Sony_ILX-LR1_D518801E89CD-video-index1"                          
   nav_rgb_topic:              "/zed/zed_node/left/image_rect_color"
-  inspection_topic:           "/camera/image_raw"
+  inspection_topic:           "/camera/image_compressed"
   nav_depth_topic:            "/zed/zed_node/depth/depth_registered"
   drone_states_topic:         "/odometry"
   gimbal_orientation_topic:   "/gimbal_orientation"
