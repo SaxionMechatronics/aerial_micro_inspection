@@ -8,6 +8,7 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDur
 from transitions import Machine
 
 from geometry_msgs.msg import QuaternionStamped
+from std_msgs.msg import Header
 from geographic_msgs.msg import GeoPoseStamped
 
 
@@ -89,6 +90,11 @@ class InspectionPlanner(Node):
 
         self.inspection_viewpoint_publisher = self.create_publisher(GeoPoseStamped, 'inspection/viewpoint', 10)
         self.publisher_gimbal = self.create_publisher(QuaternionStamped,'gimbal/setpoint',10)
+        self._photo_trigger_pub = self.create_publisher(
+            Header,
+            "inspection/photo_triggered",
+            10
+        )
 
         self.odometry_sub = self.create_subscription(
             GeoPoseStamped,
@@ -248,6 +254,12 @@ class InspectionPlanner(Node):
             result = self._photo_future.result()
             if result.success:
                 self.get_logger().info("Photo Taken")
+
+                msg = Header()
+                msg.stamp = self.get_clock().now().to_msg()
+                msg.frame_id = ""
+                self._photo_trigger_pub.publish(msg)
+                
                 self.gimbal_index += 1
                 self.photo_taken()
             else:
