@@ -1,0 +1,22 @@
+ai_camera:
+  topic_name: /camera/image_raw
+  image_width: 8000
+  image_height: 6000
+  camera_matrix:
+  - 5553.06
+  - 0.0
+  - 4000.0
+  - 0.0
+  - 5553.06
+  - 3000.0
+  - 0.0
+  - 0.0
+  - 1.0
+  distortion:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  body_frame_offset: [0.0, 0.0, 0.0] #position of the camera from the body frame of the drone in ENU! The better the approximation, the better the results
+

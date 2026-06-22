@@ -3,7 +3,7 @@ import numpy as np
 import networkx as nx
 from networkx.algorithms import approximation as approx
 import trimesh
-import open3d as o3d
+# import open3d as o3d
 import os
 import math
 import time
