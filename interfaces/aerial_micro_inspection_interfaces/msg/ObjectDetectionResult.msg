@@ -1,0 +1,10 @@
+# ObjectDetectionResult.msg
+std_msgs/Header      header
+sensor_msgs/Image    mask
+int32                x
+int32                y
+int32                w
+int32                h
+int32                img_w
+int32                img_h
+string               src_type

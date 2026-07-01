@@ -15,6 +15,7 @@ Build from the workspace `src` directory:
 ```bash
 cd ~ && mkdir -p scanner_ws/src && cd ~/scanner_ws/src
 git clone https://github.com/SaxionMechatronics/aerial_micro_inspection.git
+cp -r aerial_micro_inspection/interfaces/* .
 docker build -f aerial_micro_inspection/Dockerfile -t aerial_micro_inspection:humble .
 ```
 
