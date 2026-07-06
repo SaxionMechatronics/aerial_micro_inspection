@@ -3,7 +3,6 @@ import numpy as np
 import networkx as nx
 from networkx.algorithms import approximation as approx
 import trimesh
-import open3d as o3d
 import os
 import math
 import time
@@ -64,7 +63,7 @@ def load_viewpoints(file_path):
 
 
 # ---------------------------
-# Save path (same format, reordered)
+# Save path
 # ---------------------------
 def save_path(file_path, ordered_viewpoints, ref_gps:list):
     data = {
@@ -90,15 +89,12 @@ def save_path(file_path, ordered_viewpoints, ref_gps:list):
 def rotation_matrix_from_euler(roll: float, pitch: float, yaw: float) -> np.ndarray:
     """
     Builds a rotation matrix from roll, pitch, yaw (in radians).
-    Convention: intrinsic Tait-Bryan ZYX (yaw applied first, then pitch, then roll).
-    This is standard aerospace / MAVLink / ROS convention.
-    R transforms a vector FROM the source frame TO the target frame.
     """
     cr, sr = math.cos(roll),  math.sin(roll)
     cp, sp = math.cos(pitch), math.sin(pitch)
     cy, sy = math.cos(yaw),   math.sin(yaw)
 
-    # Rz(yaw) @ Ry(pitch) @ Rx(roll)
+   
     return np.array([
         [ cy*cp,  cy*sp*sr - sy*cr,  cy*sp*cr + sy*sr],
         [ sy*cp,  sy*sp*sr + cy*cr,  sy*sp*cr - cy*sr],
@@ -327,7 +323,6 @@ def get_path_colors(n):
     colors = []
     for i in range(n):
         t = i / max(n - 1, 1)
-        # gradient: blau → verd → vermell
         r = int(255 * t)
         g = int(255 * (1 - abs(t - 0.5) * 2))
         b = int(255 * (1 - t))
@@ -371,7 +366,7 @@ def visualize_path(mesh, viewpoints):
     for line in lines:
         scene.add_geometry(line)
 
-    # Optional: axes (debug)
+    # Axes
     origin = np.array([0.0, 0.0, 0.0])
     axes = [
         (np.array([1.3,0,0]), [255,0,0,255]),

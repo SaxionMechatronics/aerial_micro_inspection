@@ -79,33 +79,6 @@ def weld_vertices(mesh, tolerance=1e-5):
     
     return new_mesh
 
-def cluster_surfaces_old(mesh, threshold=0.95):#TODO Remove or use for comparison without adjacency
-    """
-    From a mesh, clusters triangles into surfaces by checking similarity normal angles
-
-    """
-
-    normals=mesh.face_normals
-
-    clusters = []
-
-    for i,n in enumerate(normals):
-        assigned=False
-
-        for cluster in clusters:
-            if np.dot(n,cluster["normal"])>threshold:
-                cluster["faces"].append(i) 
-                assigned=True
-                break
-
-        if not assigned:
-            clusters.append({
-            "normal": n,
-            "faces": [i]
-            })
-    
-    return clusters
-
 def cluster_surfaces(mesh, config):
     """
     Clusters triangles into surfaces by checking normal similarity
@@ -140,7 +113,6 @@ def cluster_surfaces(mesh, config):
 
             for neighbor in adj[face]:
                 if neighbor in unvisited and np.dot(normals[neighbor], seed_normal) > threshold:
-                #if neighbor in unvisited and np.dot(normals[neighbor], normals[face]) > threshold:
                     unvisited.remove(neighbor)
                     queue.append(neighbor)
 
@@ -297,11 +269,10 @@ def split_surfaces_with_kmeans(mesh, surfaces,r_ex):
 
         k = max(1, int(np.ceil(area_surface / area_fov)))
 
-        #print(f'K initialized to {k}')
 
         while True:
 
-            k = min(k, len(pts_2d))  # safety
+            k = min(k, len(pts_2d)) 
 
             kmeans = KMeans(n_clusters=k, n_init=10, random_state=0)
             labels = kmeans.fit_predict(pts_2d)
@@ -864,7 +835,6 @@ def resolution_heat_map(mesh,surfaces,viewpoints,fx,nominal_resolution=None):
         position = vp["position"]
         normal = surface["normal"]
         normal_u = normal/np.linalg.norm(normal)
-        #position = position + normal_u*np.array([0.0,0.0,0.5]) #Modifacte viewpoint wiht noise
 
         for face_idx in surface["faces"]:
 
@@ -939,7 +909,6 @@ def resolution_heat_map(mesh,surfaces,viewpoints,fx,nominal_resolution=None):
     # Show min/max nicely
     cb.ax.tick_params(labelsize=10)
 
-    # Optional nominal resolution marker
     if nominal_resolution is not None:
 
         # Clamp in case it is outside range
@@ -1046,9 +1015,6 @@ def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface, config):
         
             direction = -vp["directions"][i]
 
-            # offset to avoid auto intersection
-            #origin = origin + direction * 1e-3
-
             # Ray cast
             locations, index_ray, index_tri = mesh.ray.intersects_location(
                 ray_origins=[origin],
@@ -1058,7 +1024,7 @@ def filter_occluded_viewpoints(mesh, viewpoints, face_to_surface, config):
             if len(index_tri) == 0:
                 removed_targets.add((target))
                 removed_index.append(i)
-                continue  # discard?
+                continue  
 
             # Closest intersection face
             distances = np.linalg.norm(locations - origin, axis=1)
@@ -1114,15 +1080,10 @@ def main():
     print(f"Loaded camera: fx={fx}, fy={fy}, resolution={width}x{height}")
 
     # Load mesh
-    mesh = trimesh.load(mesh_path, force='mesh')#, skip_materials=True
+    mesh = trimesh.load(mesh_path, force='mesh')
     mesh.apply_scale(config["mesh_scale"])
     if config["weld_mesh"]:
         mesh = weld_vertices(mesh, tolerance=config["weld_tolerance"])
-    #diagnose_adjacency(mesh)
-
-    #print(f"Mesh loaded. Centroid: {mesh.centroid}")
-    #print("Bounding box:", mesh.bounds)
-    #print("Size:", mesh.extents)
 
     # Compute values for viewpoint generation
 
@@ -1158,7 +1119,6 @@ def main():
 
 
 
-    #We only want to see the time to compute 
     end = time.time()
     print(f"Elapsed: {end - start:.4f}s")
 
@@ -1168,20 +1128,11 @@ def main():
 
     print(f"Viewpoint positions computed: {len(viewpoints)}")
     print(f"Viewpoint directions computed: {directions}")
-    i=102 #TODO Remove this, only used to select specific waypoint
+
     # Visualize
     if config["visualize"]:
         visualize(mesh,surfaces,viewpoints,config)
         
-        # for j in range(len(surfaces)):
-            
-        #     visualize(mesh,[surfaces[j]],[viewpoints[j]],config,specific_id=j)
-
-
-        #visualize(mesh,surfaces,viewpoints,config,specific_id=i)
-    
-    #print(f"Viewpoint used: {viewpoints[i]}")
-    
     
     # Save
     save_viewpoints(output_path, viewpoints)

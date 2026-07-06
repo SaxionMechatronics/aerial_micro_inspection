@@ -109,6 +109,7 @@
       <name>prius_hybrid</name>
       <pose>20 2 0 0 0 3.14</pose>
     </include>
+
     
     <include>
 	<uri>model://cube</uri>

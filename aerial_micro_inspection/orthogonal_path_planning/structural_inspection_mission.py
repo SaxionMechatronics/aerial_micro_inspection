@@ -23,13 +23,6 @@ class OffboardControl(Node):
     def __init__(self):
         super().__init__('minimal_publisher')
 
-        # viewpoints = self.load_viewpoints()
-
-        # self.declare_parameter('target_waypoint_x', viewpoints[100]["position"][0])
-        # self.declare_parameter('target_waypoint_y', viewpoints[100]["position"][1])
-        # self.declare_parameter('target_waypoint_z', viewpoints[100]["position"][2])
-        # self.declare_parameter('target_yaw_deg', viewpoints[100]["yaw"])
-        # self.declare_parameter('target_pitch_rad', viewpoints[100]["pitch"][0])
 
         self.inspection_viewpoint_x = 0.0
         self.inspection_viewpoint_y = 0.0
@@ -94,9 +87,9 @@ class OffboardControl(Node):
             qos_profile_sub)
 
         
-        #self.publisher_offboard_mode = self.create_publisher(OffboardControlMode, 'fmu/in/offboard_control_mode', qos_profile_pub)
-        #self.publisher_trajectory = self.create_publisher(TrajectorySetpoint, 'fmu/in/trajectory_setpoint', qos_profile_pub)
-        #self.publisher_vehicle_command = self.create_publisher(VehicleCommand, 'fmu/in/vehicle_command', qos_profile_pub)
+        self.publisher_offboard_mode = self.create_publisher(OffboardControlMode, 'fmu/in/offboard_control_mode', qos_profile_pub) #TODO Comment for real drone
+        self.publisher_trajectory = self.create_publisher(TrajectorySetpoint, 'fmu/in/trajectory_setpoint', qos_profile_pub) #TODO Comment for real drone
+        self.publisher_vehicle_command = self.create_publisher(VehicleCommand, 'fmu/in/vehicle_command', qos_profile_pub) #TODO Comment for real drone
         self.publisher_global_pose = self.create_publisher(GeoPoseStamped, 'inspection/gps_pose', 10)
         self.path_publisher = self.create_publisher(Path, "inspection/robot_path", 10)
         self.pose_publisher = self.create_publisher(PoseStamped, "inspection/robot_pose", 10)
@@ -135,7 +128,7 @@ class OffboardControl(Node):
         vehicle_command.source_system = 1
         vehicle_command.source_component = 1
         vehicle_command.from_external = True
-        #self.publisher_vehicle_command.publish(vehicle_command)
+        self.publisher_vehicle_command.publish(vehicle_command) #TODO Comment for real drone
 
     def vehicle_status_callback(self, msg):
         print("NAV_STATUS: ", msg.nav_state)
@@ -180,20 +173,15 @@ class OffboardControl(Node):
         pose.pose.position.z=position[2]
 
         q_ned = R.from_quat([
-            x,  # x
-            y,  # y
-            z,  # z
-            w   # w
+            x,  
+            y,  
+            z,  
+            w   
         ])
 
         ned_to_enu = R.from_euler('x', 180, degrees=True)
         q_enu = ned_to_enu * q_ned
-        q = q_enu.as_quat()  # returns [x, y, z, w]
-
-        # pose.pose.orientation.x=q[0]
-        # pose.pose.orientation.y=q[1]
-        # pose.pose.orientation.z=q[2]
-        # pose.pose.orientation.w=q[3]
+        q = q_enu.as_quat() 
 
         pose.pose.orientation.x=x
         pose.pose.orientation.y=y
@@ -207,21 +195,21 @@ class OffboardControl(Node):
 
 
     def vehicle_attitude_callback(self, msg):
-        self._latest_attitude = msg  # cache it, quaternion is msg.q = [w, x, y, z]
+        self._latest_attitude = msg  
 
     def vehicle_global_position_callback(self, msg):
         gps_pose = GeoPoseStamped()
         gps_pose.header.stamp = self.get_clock().now().to_msg()
         gps_pose.header.frame_id = 'ned'
 
-        # Position from EKF2 fused global position
+
         gps_pose.pose.position.latitude  = float(msg.lat)
         gps_pose.pose.position.longitude = float(msg.lon)
         gps_pose.pose.position.altitude  = float(msg.alt_ellipsoid)
 
-        # Orientation from latest attitude estimate (also EKF2 fused)
+
         if self._latest_attitude is not None:
-            # PX4 VehicleAttitude.q is [w, x, y, z]
+          
             gps_pose.pose.orientation.w = float(self._latest_attitude.q[0])
             gps_pose.pose.orientation.x = float(self._latest_attitude.q[1])
             gps_pose.pose.orientation.y = float(self._latest_attitude.q[2])
@@ -277,7 +265,7 @@ class OffboardControl(Node):
         offboard_msg.position=True
         offboard_msg.velocity=False
         offboard_msg.acceleration=False
-        #self.publisher_offboard_mode.publish(offboard_msg)
+        self.publisher_offboard_mode.publish(offboard_msg) #TODO Comment for real drone
 
         trajectory_msg = TrajectorySetpoint()
         trajectory_msg.timestamp = now_us
@@ -298,7 +286,7 @@ class OffboardControl(Node):
                 trajectory_msg.position[2] = self.inspection_viewpoint_z
 
         trajectory_msg.yaw = self.inspection_viewpoint_yaw
-        #self.publisher_trajectory.publish(trajectory_msg)
+        self.publisher_trajectory.publish(trajectory_msg) #TODO Comment for real drone
 
         if self.offboard_setpoint_counter < 10:
             self.offboard_setpoint_counter += 1

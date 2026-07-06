@@ -34,7 +34,7 @@ class InspectionPlanner(Node):
         self.gimbal_orientation = None
         self.gimbal_time = None
         self._photo_future = None
-        self.arrival_threshold_position = 0.1 #0.05 # 10cm
+        self.arrival_threshold_position = 0.1 # 10cm
         self.arrival_threshold_angle = 0.02 # ~1º
         self.viewpoints_sorted=False
         
@@ -187,27 +187,14 @@ class InspectionPlanner(Node):
                 _,_,yaw = self.quaternion_to_euler(w,x,y,z)
                 dyaw = yaw - self.target_pose['yaw']
 
-                # Gimbal angle check, maybe usable with real drone but without proper gimbal feedback, useless
-                # g_orientation = self.gimbal_orientation
-                # _,g_pitch,g_yaw = self.quaternion_to_euler(g_orientation.w,g_orientation.x,g_orientation.y,g_orientation.z)
-                # dpitch = g_pitch - self.target_pose['pitch'][0]
-                # dg_yaw = g_yaw - 0 #TODO implement gimbal yaw check with respect required angle for oblique inspection
-
-                #For debug only:
-                # self.get_logger().info(f"dx: {dx}")
-                # self.get_logger().info(f"dy: {dy}")
-                # self.get_logger().info(f"dz: {dz}")
-                # self.get_logger().info(f"dyaw: {dyaw}")
-
-
                 
-                # if dist < self.arrival_threshold_position and dyaw < self.arrival_threshold_angle and dpitch < self.arrival_threshold_angle and dg_yaw < self.arrival_threshold_angle:
                 if dist < self.arrival_threshold_position and dyaw < self.arrival_threshold_angle :
                 
                     self.get_logger().info("Arrived to viewpoint, requesting photo...")
                     self.arrived_position()
 
     def gimbal_orientation_callback(self,msg):
+        # Add here the gimbal feedback check, if available
         self.gimbal_orientation=msg.quaternion
 
             
@@ -364,7 +351,7 @@ class InspectionPlanner(Node):
 
         ned_viewpoints = []
         for vp in viewpoints:
-            ned_vp = dict(vp)  # shallow copy, angles carry over as-is
+            ned_vp = dict(vp) 
             ned_vp["position"] = self.gps_to_ned(
                 vp["position"][0], vp["position"][1], vp["position"][2],
                 self.ref_gps[0], self.ref_gps[1], self.ref_gps[2]

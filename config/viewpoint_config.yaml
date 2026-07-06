@@ -7,7 +7,8 @@
 mesh_path: "../../simulation/gazebo/worlds/Fake_Blade/Fake_blade.obj"
 
 ####### CAMERA CONFIG PATH #######
-camera_config: "../../config/real_test/cameras_calib.yaml"
+#camera_config: "../../config/real_test/cameras_calib.yaml"
+camera_config: "../../config/simulation/cameras_sim.yaml"
 
 ####### OUTPUT PATH #######
 output_path: "../../config/viewpoints.yaml"
@@ -20,7 +21,7 @@ penalty_factor: 1000.0 #penalty factor for the path planner, higher values will 
 ####### VIEWPOINT GENERATION CONFIG #######
 mesh_scale: 0.001
 
-resolution_target: 0.0006 #0.0001 takes 26 min  # metres/pixel  First test 0.0006
+resolution_target: 0.001 #0.0001 takes 26 min  # metres/pixel  First test 0.0006
 
 surface_threshold: 0.9 #desired similarity between two triangle normals to be considered as the same surface
 
@@ -30,11 +31,11 @@ subdivide_edge_size: 0.05 #size of the longest edge of a triangle after subdivis
 
 alpha: 1.0 # Reduction of the efective FOV to reduce radial distortion, 1 means no reduction, 0.8 means 20% reduction
 
-beta: 0.8 # Reduction of the effective FOV to ensure overlap, 1 means no reduction, 0.8 means 20% reduction 
+beta: 0.9 # Reduction of the effective FOV to ensure overlap, 1 means no reduction, 0.8 means 20% reduction 
 
-max_angle: 10.0 #maximum angle between the camera normal and the surface normal for inspection, in degrees
+max_angle: 30.0 #maximum angle between the camera normal and the surface normal for inspection, in degrees
 
-visualize_heatmap: false #whether to visualize the heatmap of the surface coverage
+visualize_heatmap: true #whether to visualize the heatmap of the surface coverage
 
 
 ####### WELDING CONFIG #######
@@ -50,10 +51,10 @@ plane_filter:
     visualize_size: 5.0         #Size of the visualized plane, in metres of the square side
     point: [0.0, 0.0, 0.0]     # For the Prius
     normal: [0.0, 0.0, 1.0]    # normal looking upwards in ENU, in NED it would be [0.0, 0.0, -1.0]
-    min_distance: 0.1          # Minimum distance from the ground plane to consider a point as valid
+    min_distance: 0.5          # Minimum distance from the ground plane to consider a point as valid
 
   ceiling_plane:
-    enabled: true
+    enabled: false
     visualize: true
     visualize_size: 5.0       #Size of the visualized plane, in metres of the square side
     point: [0.0, 0.0, 2.0]     # For the Prius
@@ -62,7 +63,7 @@ plane_filter:
 
 
 occlude_filter:
-  enabled: true
+  enabled: false
   permessivity: 0.00 #Extra filter for fine tuning, avoids some surfaces to be deleted by mistake as the base filter is very restrictive. The Higher numebr, the more permissive it is.
 
 interior_filter:

@@ -25,7 +25,7 @@ from scipy.spatial.transform import Rotation
 
 
 # =========================================================
-# CONFIG  (unchanged)
+# CONFIG  
 # =========================================================
 
 SAVE_FOLDER = "/ws/src/aerial_micro_inspection/images"
@@ -44,7 +44,7 @@ GEO_FILENAME = "geo.txt"
 
 
 # =========================================================
-# HELPERS  (all unchanged)
+# HELPERS  
 # =========================================================
 
 def decimal_to_dms(value: float):
@@ -101,8 +101,7 @@ class ImageCaptureNode(Node):
         )
 
         # ---------------------------------
-        # Subscriptions (unchanged topics,
-        # only cb_group added to each)
+        # Subscriptions 
         # ---------------------------------
 
         self.create_subscription(
@@ -123,10 +122,7 @@ class ImageCaptureNode(Node):
         )
 
         # ---------------------------------
-        # Service server  ← NEW
-        # Replaces the one-shot main() logic.
-        # The planner calls /take_photo and
-        # blocks until this returns.
+        # Service server  
         # ---------------------------------
 
         self._service = self.create_service(
@@ -141,7 +137,7 @@ class ImageCaptureNode(Node):
         )
 
     # =====================================================
-    # TOPIC CALLBACKS  (unchanged)
+    # TOPIC CALLBACKS  
     # =====================================================
 
     def image_callback(self, msg):
@@ -157,9 +153,7 @@ class ImageCaptureNode(Node):
         self.latest_camera_info = msg
 
     # =====================================================
-    # SERVICE CALLBACK  ← NEW
-    # Replaces the spin-wait loop that was in main().
-    # Blocks until data is ready (or timeout), then saves.
+    # SERVICE CALLBACK 
     # =====================================================
 
     def take_photo_callback(self, request, response):
@@ -200,7 +194,7 @@ class ImageCaptureNode(Node):
         return response
 
     # =====================================================
-    # READINESS CHECK  (unchanged)
+    # READINESS CHECK  
     # =====================================================
 
     def data_ready(self) -> bool:
@@ -212,9 +206,6 @@ class ImageCaptureNode(Node):
 
     # =====================================================
     # MAIN SAVE FUNCTION
-    # Only change vs original: renamed to _save_capture
-    # and returns the image path (str) or None on failure
-    # instead of returning nothing.
     # =====================================================
 
     def _save_capture(self) -> str | None:
@@ -255,7 +246,7 @@ class ImageCaptureNode(Node):
         lat_ref = b"N" if lat >= 0 else b"S"
         lon_ref = b"E" if lon >= 0 else b"W"
 
-        # Orientation (optional)
+        # Orientation 
         yaw_deg = pitch_deg = roll_deg = None
 
         if self.latest_pose is not None:
@@ -322,13 +313,13 @@ class ImageCaptureNode(Node):
             f"  FPlane   -> {fplane_x:.2f} x {fplane_y:.2f} px/mm"
         )
 
-        # self._append_geo_txt(image_name, lat, lon, alt, yaw_deg, pitch_deg, roll_deg)
+       
         self._update_cameras_json(fx, fy, image_width_px, image_height_px)
 
         return image_path
 
     # =====================================================
-    # GEO.TXT  (unchanged)
+    # GEO.TXT 
     # =====================================================
 
     def _append_geo_txt(self, image_name, lat, lon, alt,
@@ -359,7 +350,7 @@ class ImageCaptureNode(Node):
         )
 
     # =====================================================
-    # CAMERAS.JSON  (unchanged)
+    # CAMERAS.JSON 
     # =====================================================
 
     def _update_cameras_json(self, fx, fy, width, height):
@@ -403,8 +394,7 @@ class ImageCaptureNode(Node):
 
 
 # =========================================================
-# MAIN  ← only change: persistent spin with MultiThreadedExecutor
-# instead of one-shot spin_once loop
+# MAIN  
 # =========================================================
 
 def main(args=None):

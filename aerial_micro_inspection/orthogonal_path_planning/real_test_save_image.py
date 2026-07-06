@@ -23,8 +23,6 @@ import numpy as np
 
 SAVE_FOLDER = "/home/sarax/Documents/scanner_ws/src/aerial_micro_inspection/images"
 
-# CompressedImage topics follow the convention .../compressed
-# (i.e. the camera manager publishes on this alongside image_raw)
 IMAGE_TOPIC = "/camera/image_compressed"
 
 DATA_TIMEOUT_SEC = 10.0
@@ -74,8 +72,6 @@ class ImageCaptureNode(Node):
 
     # =====================================================
     # SERVICE CALLBACK
-    # Blocks until an image is available (or timeout),
-    # then saves it and returns the path.
     # =====================================================
 
     def take_photo_callback(self, request, response):
@@ -122,8 +118,7 @@ class ImageCaptureNode(Node):
         image_path = os.path.join(SAVE_FOLDER, image_name)
 
         try:
-            # Decode the compressed bytes straight to a BGR array and write.
-            # cv2.imdecode handles both JPEG and PNG payloads automatically.
+
             np_arr   = np.frombuffer(self.latest_image.data, np.uint8)
             cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 

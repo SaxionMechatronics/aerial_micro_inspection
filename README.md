@@ -128,4 +128,104 @@ Expected outcome:
 ![car inspection](demo/car_inspection1.gif)
 
 
+# Viewpoint Generation
+
+
+## Introduction
+
+This part of the package implements a systematic approach to autonomously plan the trajectory of a drone that can capture images from the right spots. The goal is to ensure the images will cover the entirety of an object (coverage), and we will get the desired resolution over every spot on the object's surface.
+
+**Inputs** of the process:
+- A rough model (a `.obj` file) of the target
+- Information about the inspection camera (intrinsic calibration)
+
+**Outputs**:
+- A `.yaml` file containing the inspection viewpoints and the correct order of traversing them to minimize flight time
+
+**Parameters** to tune by the user:
+- Desired resolution on the object surface
+- Obliqueness allowance
+- Filtering of surfaces and viewpoints
+
+The pipeline should be applicable to any object with a proper 3D model.
+
+## Instructions
+1. Adjust the `viewpoint_config.yaml` file in the **config** folder:
+   - a. Set target object model path to an `.obj` file
+   - b. Set the camera intrinsic matrix file 
+   - c. Mesh scale to set the model in meters
+   - d. Set the desired resolution and maximum incidence angle
+   - e. Set the filtering planes and tune the small surface filter
+   - f. If the object is too large, increase the triangle subdivision size
+2. Run the viewpoint generation method. Assuming the terminal is in the root folder of the package:
+ 
+```bash
+   python3 oblique_path_planning/oblique_viewpoint_generator.py
+```
+ *Healthy result:*
+
+ ![viewpoints generated](demo/Oblique_Viewpoints.png)
+
+3. Run the path planner code:
+
+	- a. At the beginning of the path planner, answer the question `Use the current GPS reference? [yes/no]` with `no`. This is because we have to choose a reference point in the model where we should place our phone/drone to read the position. This will relate the 3D CAD model to the real-world position of the object. Then in the GUI, left click on the point of reference that you prefer and then press `q` once you are done.  Place the drone/phone in a way that the object's north should face the green axis of the reference object.
+	- b. Then the code asks for the GPS coordinates, including lat/lon/alt and roll/pitch/yaw. Roll and pitch are expected to be zero for conventional objects. The GPS reference point information looked like the one presented below.
+	- c. If we did not like the path, we should go back to the viewpoint generator and adjust either the camera resolution or the desired resolution, and then rerun the path planner.
+
+```bash
+   python3 oblique_path_planning/path_planner.py
+```
+ 
+```yaml
+   frame_translation:
+     - -1.409505249
+     - 0.15857046125000002
+     - 1.2
+   latitude_reference: 52.2255111
+   longitude_reference: 6.6931756
+   altitude_reference: 1.9
+   yaw_difference: 115.0
+   pitch_difference: 0.0
+   roll_difference: 0.0
+```
+
+*Healthy path:*
+ ![path generated](demo/Oblique_Path.png)
+
+## Simualted Inspection
+
+To do testing in simulation, execute QGroundControl and run:
+
+```bash
+   ros2 launch aerial_micro_inspection structure_inspection.launch.py
+```
+
+This executes the Gazebo simulation environtment. Once the drone is flying, execute to start the inspection:
+
+```bash
+   ros2 run aerial_micro_inspection structural_inspection_planner
+```
+
+## Real World Inspection
+
+To initalize the SARAX drone, run:
+
+```bash
+   ros2 launch aerial_micro_inspection real_test_structure_inspection.launch.py
+```
+
+Remember to comment out the corresponding lines in the mission file in case a hand-held inspection is prefered over to a flying inspection, for security reasons.
+
+Once ready to inspect, run the same node as in simulation:
+
+```bash
+   ros2 run aerial_micro_inspection structural_inspection_planner
+```
+
+This has not been proeprly tested in real wolrd and might have problems. Solving this issue is a planned future work.
+
+
+
+
+
 
